@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: dailyapp-web-pg
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dailyApp
+    volumes:
+      - dailyapp_web_pg:/var/lib/postgresql/data
+
+volumes:
+  dailyapp_web_pg:

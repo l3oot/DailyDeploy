@@ -1,0 +1,233 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { distanceMeters, isInsideGeofence } from "./geofence";
+import { useI18n } from "./i18n/provider";
+import { startNearAlarm, stopNearAlarm } from "./near-alarm";
+
+export type TrackingDest = {
+  lat: number;
+  lon: number;
+  name: string;
+  storeplaceUuid?: string;
+};
+
+type PersistShape = {
+  dest: TrackingDest;
+  radiusMeters: number;
+  notifyOnExit: boolean;
+  inside: boolean;
+};
+
+const STORAGE_KEY = "da_tracking";
+
+type TrackingContextValue = {
+  active: boolean;
+  dest: TrackingDest | null;
+  radiusMeters: number;
+  notifyOnExit: boolean;
+  gps: { lat: number; lng: number } | null;
+  metersAway: number | null;
+  alarming: boolean;
+  mapVisible: boolean;
+  start: (input: { dest: TrackingDest; radiusMeters: number; notifyOnExit: boolean }) => void;
+  stop: () => void;
+  dismissAlarm: () => void;
+  setMapVisible: (visible: boolean) => void;
+};
+
+const TrackingContext = createContext<TrackingContextValue | null>(null);
+
+function loadPersist(): PersistShape | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as PersistShape;
+    if (!data?.dest || !Number.isFinite(data.dest.lat) || !Number.isFinite(data.dest.lon)) {
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function savePersist(data: PersistShape | null) {
+  if (!data) {
+    sessionStorage.removeItem(STORAGE_KEY);
+    return;
+  }
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+export function TrackingProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+  const [active, setActive] = useState(false);
+  const [dest, setDest] = useState<TrackingDest | null>(null);
+  const [radiusMeters, setRadiusMeters] = useState(500);
+  const [notifyOnExit, setNotifyOnExit] = useState(false);
+  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [alarming, setAlarming] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const insideRef = useRef(false);
+  const destRef = useRef<TrackingDest | null>(null);
+  const radiusRef = useRef(500);
+  const notifyRef = useRef(false);
+  destRef.current = dest;
+  radiusRef.current = radiusMeters;
+  notifyRef.current = notifyOnExit;
+
+  useEffect(() => {
+    const saved = loadPersist();
+    if (!saved) return;
+    destRef.current = saved.dest;
+    radiusRef.current = saved.radiusMeters;
+    notifyRef.current = saved.notifyOnExit;
+    insideRef.current = saved.inside;
+    setDest(saved.dest);
+    setRadiusMeters(saved.radiusMeters);
+    setNotifyOnExit(saved.notifyOnExit);
+    setActive(true);
+  }, []);
+
+  const watching = active || mapVisible;
+
+  useEffect(() => {
+    if (!watching || !navigator.geolocation) return;
+    const watch = navigator.geolocation.watchPosition(
+      (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => undefined,
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
+    );
+    return () => navigator.geolocation.clearWatch(watch);
+  }, [watching]);
+
+  useEffect(() => {
+    if (!active || !gps || !dest) return;
+    const destPoint = { lat: dest.lat, lng: dest.lon };
+    const inside = isInsideGeofence(gps, destPoint, radiusMeters);
+    const wasInside = insideRef.current;
+    insideRef.current = inside;
+    savePersist({ dest, radiusMeters, notifyOnExit, inside });
+
+    if (!notifyOnExit && inside && !wasInside) {
+      startNearAlarm({
+        title: t("mapAlarmTitle"),
+        body: `${t("mapAlarmEnterBody")}${dest.name}`,
+      });
+      setAlarming(true);
+    } else if (!notifyOnExit && !inside && wasInside) {
+      stopNearAlarm();
+      setAlarming(false);
+    } else if (notifyOnExit && !inside && wasInside) {
+      startNearAlarm({
+        title: t("mapAlarmExitTitle"),
+        body: `${t("mapAlarmExitBody")}${dest.name}`,
+      });
+      setAlarming(true);
+    } else if (notifyOnExit && inside && !wasInside) {
+      stopNearAlarm();
+      setAlarming(false);
+    }
+  }, [active, gps, dest, radiusMeters, notifyOnExit, t]);
+
+  const start = useCallback(
+    (input: { dest: TrackingDest; radiusMeters: number; notifyOnExit: boolean }) => {
+      destRef.current = input.dest;
+      radiusRef.current = input.radiusMeters;
+      notifyRef.current = input.notifyOnExit;
+      const alreadyInside = gps
+        ? isInsideGeofence(gps, { lat: input.dest.lat, lng: input.dest.lon }, input.radiusMeters)
+        : false;
+      insideRef.current = alreadyInside;
+      setDest(input.dest);
+      setRadiusMeters(input.radiusMeters);
+      setNotifyOnExit(input.notifyOnExit);
+      setActive(true);
+      savePersist({
+        dest: input.dest,
+        radiusMeters: input.radiusMeters,
+        notifyOnExit: input.notifyOnExit,
+        inside: alreadyInside,
+      });
+      if (!input.notifyOnExit && alreadyInside) {
+        startNearAlarm({
+          title: t("mapAlarmTitle"),
+          body: `${t("mapAlarmEnterBody")}${input.dest.name}`,
+        });
+        setAlarming(true);
+      } else {
+        stopNearAlarm();
+        setAlarming(false);
+      }
+    },
+    [gps, t],
+  );
+
+  const stop = useCallback(() => {
+    setActive(false);
+    setAlarming(false);
+    insideRef.current = false;
+    destRef.current = null;
+    setDest(null);
+    savePersist(null);
+    stopNearAlarm();
+  }, []);
+
+  const dismissAlarm = useCallback(() => {
+    stopNearAlarm();
+    setAlarming(false);
+  }, []);
+
+  const metersAway = useMemo(() => {
+    if (!gps || !dest) return null;
+    return distanceMeters(gps, { lat: dest.lat, lng: dest.lon });
+  }, [gps, dest]);
+
+  const value = useMemo<TrackingContextValue>(
+    () => ({
+      active,
+      dest,
+      radiusMeters,
+      notifyOnExit,
+      gps,
+      metersAway,
+      alarming,
+      mapVisible,
+      start,
+      stop,
+      dismissAlarm,
+      setMapVisible,
+    }),
+    [
+      active,
+      dest,
+      radiusMeters,
+      notifyOnExit,
+      gps,
+      metersAway,
+      alarming,
+      mapVisible,
+      start,
+      stop,
+      dismissAlarm,
+    ],
+  );
+
+  return <TrackingContext.Provider value={value}>{children}</TrackingContext.Provider>;
+}
+
+export function useTracking() {
+  const ctx = useContext(TrackingContext);
+  if (!ctx) throw new Error("useTracking must be used within TrackingProvider");
+  return ctx;
+}

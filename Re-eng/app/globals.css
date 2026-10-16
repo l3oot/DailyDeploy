@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fff8f0;
+  --foreground: #1a1a1a;
+  --primary: #4a89ea;
+  --primary-wave: #6ba3f0;
+  --muted: #8e8e93;
+  --card-dark: #29292e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --font-sans: var(--font-prompt);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-prompt), "Prompt", sans-serif;
+}
+
+input:focus {
+  outline: none;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+  background: #e8eef5;
+}
+
+.toilet-map-pin {
+  background: transparent;
+  border: none;
+}
