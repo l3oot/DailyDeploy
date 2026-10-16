@@ -186,9 +186,9 @@ export default function ToiletPage() {
         />
       </div>
 
-      <div className="absolute inset-x-0 top-0 z-20 flex items-start gap-1 px-2 pt-2">
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-1 px-2 pt-2">
         <PageBack href="/home" />
-        <div className="min-w-0 flex-1 rounded-xl border border-[#E5E5EA] bg-white px-3.5 py-2 shadow-sm">
+        <div className="flex h-10 min-w-0 flex-1 items-center rounded-xl border border-[#E5E5EA] bg-white px-3 shadow-sm">
           <PlaceSearch
             value={query}
             onChange={setQuery}
@@ -214,7 +214,7 @@ export default function ToiletPage() {
             setSelected(null);
             setRecenterToken((n) => n + 1);
           }}
-          className="mr-1 mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm"
+          className="mr-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path

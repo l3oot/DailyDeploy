@@ -52,11 +52,11 @@ export default function HomePage() {
         <LanguageSwitcher />
       </header>
 
-      <section className="px-5 pt-6">
+      <section className="px-5 pt-2">
         <div className="flex items-center gap-2">
           <h1 className="text-4xl font-bold">{t("homeHelloWord")}</h1>
           {name ? <span className="truncate text-4xl font-bold">{name}</span> : null}
-          <Image src="/icon/hi.png" alt="" width={44} height={44} />
+          <Image src="/icon/hi.png" alt="" width={44} height={44} className="hi-wave" />
         </div>
         {guest ? (
           <p className="mt-1 text-sm font-medium text-[#4A89EA]">{t("guestBadge")}</p>
@@ -82,7 +82,7 @@ export default function HomePage() {
             alt=""
             width={130}
             height={90}
-            className="absolute right-0 bottom-0 z-10"
+            className="absolute right-3 bottom-4 z-10"
           />
         </Link>
 
@@ -102,7 +102,7 @@ export default function HomePage() {
               alt=""
               width={64}
               height={64}
-              className="relative z-10 ml-auto mt-4"
+              className="relative z-10 ml-auto mt-4 float-y"
             />
             <div className="absolute bottom-3 left-4 z-10 flex items-center gap-1.5">
               <span className="text-xs font-bold leading-none text-[#DDEEFF]">
@@ -132,13 +132,9 @@ export default function HomePage() {
             />
             <p className="relative z-10 text-xl font-semibold">{t("bentoTaxiCardTitle")}</p>
             <p className="relative z-10 mt-1 text-[13px] text-pink-100">{t("bentoTaxiCardSubtitle")}</p>
-            <Image
-              src="/icon/taxi.png"
-              alt=""
-              width={72}
-              height={48}
-              className="relative z-10 ml-auto mt-4"
-            />
+            <span className="taxi-drive-in absolute right-3 bottom-3 z-10">
+              <Image src="/icon/taxi.png" alt="" width={72} height={48} />
+            </span>
           </Link>
         </div>
       </section>

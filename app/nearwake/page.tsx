@@ -122,10 +122,18 @@ export default function NearwakePage() {
                   <button
                     type="button"
                     aria-label={t("deleteFavoritePlace")}
-                    className="rounded-2xl bg-white px-3 text-[#C33E83]"
+                    className="flex items-center justify-center rounded-2xl bg-[#E5484D] px-3 text-white"
                     onClick={() => void remove(item.favoritePlaceUuid)}
                   >
-                    ×
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
                 </li>
               );

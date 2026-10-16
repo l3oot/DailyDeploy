@@ -42,3 +42,78 @@ input:focus {
   background: transparent;
   border: none;
 }
+
+@keyframes hi-wave {
+  0% {
+    transform: rotate(0deg);
+  }
+  18% {
+    transform: rotate(16deg);
+  }
+  36% {
+    transform: rotate(-10deg);
+  }
+  54% {
+    transform: rotate(14deg);
+  }
+  72% {
+    transform: rotate(-6deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.hi-wave {
+  display: inline-block;
+  transform-origin: 70% 90%;
+  animation: hi-wave 0.9s ease-in-out;
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.float-y {
+  animation: float-y 2.8s ease-in-out infinite;
+}
+
+@keyframes taxi-drive-in {
+  0% {
+    transform: translate3d(-160px, -160px, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  14% {
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: linear;
+  }
+  86% {
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    transform: translate3d(160px, 160px, 0);
+  }
+}
+
+.taxi-drive-in {
+  display: inline-block;
+  animation: taxi-drive-in 14s infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hi-wave,
+  .float-y,
+  .taxi-drive-in {
+    animation: none;
+  }
+}
