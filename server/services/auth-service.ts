@@ -310,6 +310,21 @@ export async function verifyOtp(
   return ok(session, "OTP verified and logged in successfully");
 }
 
+export async function validRefreshRow(presented: string) {
+  if (!presented) return null;
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(refreshToken)
+    .where(eq(refreshToken.refreshToken, presented))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  if (row.expiresAt.getTime() <= Date.now()) return null;
+  if (row.revokedAt) return null;
+  return row;
+}
+
 export async function refreshSession(
   presented: string,
 ): Promise<ApiResponse<TokenPayload | null>> {

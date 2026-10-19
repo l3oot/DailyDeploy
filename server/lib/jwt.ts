@@ -43,5 +43,5 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims | n
 export function randomRefreshToken(): string {
   const bytes = new Uint8Array(64);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64");
+  return Buffer.from(bytes).toString("base64url");
 }

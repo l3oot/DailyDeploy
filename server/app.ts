@@ -1,6 +1,5 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { pingDb } from "./db";
+import { describeDatabaseUrl, pingDb } from "./db";
 import { fail, TypeError } from "./lib/api-response";
 import { rateLimit } from "./lib/rate-limit";
 import authRoutes from "./routes/auth";
@@ -14,22 +13,54 @@ import userRoutes from "./routes/users";
 
 const app = new Hono().basePath("/api");
 
-app.use(
-  "*",
-  cors({
-    origin: (origin) => origin || "*",
-    credentials: true,
-  }),
-);
+// Apply CORS after the handler. The built-in cors() helper touches `c.res`
+// before `next()`, which drops Set-Cookie on Vercel/Next (login never sticks).
+app.use("*", async (c, next) => {
+  if (c.req.method === "OPTIONS") {
+    const origin = c.req.header("origin") ?? "";
+    const headers = new Headers();
+    if (origin) {
+      headers.set("Access-Control-Allow-Origin", origin);
+      headers.set("Access-Control-Allow-Credentials", "true");
+      headers.set("Vary", "Origin");
+    }
+    headers.set(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    );
+    headers.set(
+      "Access-Control-Allow-Headers",
+      c.req.header("Access-Control-Request-Headers") ||
+        "Content-Type,Authorization",
+    );
+    return new Response(null, { status: 204, headers });
+  }
+  await next();
+  const origin = c.req.header("origin") ?? "";
+  if (origin) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Access-Control-Allow-Credentials", "true");
+    c.header("Vary", "Origin", { append: true });
+  }
+});
 app.use("*", rateLimit);
 
 app.get("/v1/health", async (c) => {
   const hasUrl = Boolean(process.env.DATABASE_URL);
-  const db = hasUrl ? await pingDb() : false;
+  const ping = hasUrl ? await pingDb() : { ok: false, error: "DATABASE_URL is not set" };
+  const meta = describeDatabaseUrl();
   return c.json({
     isSuccess: true,
     message: "ok",
-    data: { db, hasDatabaseUrl: hasUrl },
+    data: {
+      db: ping.ok,
+      hasDatabaseUrl: hasUrl,
+      dbHost: meta.host,
+      dbPort: meta.port,
+      connectPort: meta.connectPort,
+      sslmode: meta.sslmode,
+      dbError: ping.error ?? null,
+    },
     errorType: 0,
   });
 });

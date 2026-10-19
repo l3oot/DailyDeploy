@@ -12,7 +12,9 @@ import { setGuest } from "@/lib/guest";
 import { useI18n } from "@/lib/i18n/provider";
 
 const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
-const canSkipToHome = process.env.NEXT_PUBLIC_AUTH_DEV_OTP === "true";
+const canSkipToHome =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_AUTH_DEV_OTP === "true";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SendOtpData = { via?: "auth0" | "dev"; debugOtp?: string };

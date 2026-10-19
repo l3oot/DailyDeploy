@@ -8,10 +8,17 @@ export const REFRESH_COOKIE = "da_refresh";
 function cookieBase() {
   return {
     httpOnly: true,
-    secure: serverEnv().isProd,
+    secure: serverEnv().isProd || Boolean(process.env.VERCEL),
     sameSite: "Lax" as const,
     path: "/",
   };
+}
+
+export function setAccessCookie(c: Context, accessToken: string) {
+  setCookie(c, ACCESS_COOKIE, accessToken, {
+    ...cookieBase(),
+    maxAge: 15 * 60,
+  });
 }
 
 export function setAuthCookies(
@@ -19,10 +26,7 @@ export function setAuthCookies(
   accessToken: string,
   refreshToken: string,
 ) {
-  setCookie(c, ACCESS_COOKIE, accessToken, {
-    ...cookieBase(),
-    maxAge: 15 * 60,
-  });
+  setAccessCookie(c, accessToken);
   setCookie(c, REFRESH_COOKIE, refreshToken, {
     ...cookieBase(),
     maxAge: 30 * 24 * 60 * 60,

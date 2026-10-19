@@ -15,16 +15,7 @@ export default function SessionStartPage() {
 
     async function boot() {
       try {
-        let me = await api<SessionUser>("/api/v1/auth/me");
-        if (me.status === 401) {
-          const refreshed = await api("/api/v1/auth/refreshtoken", {
-            method: "POST",
-            body: JSON.stringify({}),
-          });
-          if (refreshed.body.isSuccess) {
-            me = await api<SessionUser>("/api/v1/auth/me");
-          }
-        }
+        const me = await api<SessionUser>("/api/v1/auth/me");
         if (cancelled) return;
         if (me.body.isSuccess) {
           router.replace("/home");

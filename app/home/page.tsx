@@ -27,19 +27,8 @@ export default function HomePage() {
       setToiletCount(n);
     });
     if (guestMode) return;
-    void api<SessionUser>("/api/v1/auth/me").then(async (me) => {
-      if (me.body.isSuccess && me.body.data) {
-        setUser(me.body.data);
-        return;
-      }
-      const refreshed = await api("/api/v1/auth/refreshtoken", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      if (refreshed.body.isSuccess) {
-        const again = await api<SessionUser>("/api/v1/auth/me");
-        if (again.body.data) setUser(again.body.data);
-      }
+    void api<SessionUser>("/api/v1/auth/me").then((me) => {
+      if (me.body.data) setUser(me.body.data);
     });
   }, []);
 

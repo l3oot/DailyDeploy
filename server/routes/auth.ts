@@ -9,6 +9,7 @@ import {
   refreshSession,
   registerUser,
   sendOtp,
+  validRefreshRow,
   verifyOtp,
 } from "../services/auth-service";
 import {
@@ -23,9 +24,10 @@ import {
   bearerToken,
   clearAuthCookies,
   readRefreshCookie,
+  setAccessCookie,
   setAuthCookies,
 } from "../lib/cookies";
-import { verifyAccessToken } from "../lib/jwt";
+import { signAccessToken, verifyAccessToken } from "../lib/jwt";
 
 type Tokenish = {
   token?: string;
@@ -33,6 +35,11 @@ type Tokenish = {
 };
 
 const authRoutes = new Hono();
+
+authRoutes.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+});
 
 function respond<T>(c: Context, body: ApiResponse<T>) {
   if (!body.isSuccess) {
@@ -88,7 +95,17 @@ authRoutes.post("/verify-otp", async (c) => {
 authRoutes.post("/refreshtoken", async (c) => {
   const body = await readJson(c.req.raw);
   const presented = pickString(body, "refreshToken") || readRefreshCookie(c);
-  return respond(c, await refreshSession(presented));
+  const result = await refreshSession(presented);
+  if (!result.isSuccess) {
+    if (
+      result.errorType === TypeError.InvalidCredential ||
+      result.errorType === TypeError.Forbidden
+    ) {
+      clearAuthCookies(c);
+    }
+    return c.json(result, statusFor(result.errorType) as ContentfulStatusCode);
+  }
+  return respond(c, result);
 });
 
 authRoutes.post("/logout", async (c) => {
@@ -107,7 +124,15 @@ authRoutes.post("/logout", async (c) => {
 
 authRoutes.get("/me", async (c) => {
   const token = bearerToken(c);
-  const claims = token ? await verifyAccessToken(token) : null;
+  let claims = token ? await verifyAccessToken(token) : null;
+  if (!claims?.sub) {
+    const row = await validRefreshRow(readRefreshCookie(c));
+    if (row) {
+      const renewed = await signAccessToken(row.authUuid, row.authEmail);
+      setAccessCookie(c, renewed.token);
+      claims = await verifyAccessToken(renewed.token);
+    }
+  }
   if (!claims?.sub) {
     return c.json(fail("Missing or invalid token", TypeError.InvalidCredential), 401);
   }
