@@ -40,11 +40,11 @@ export function PlaceSearch({
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [fromNearwake, setFromNearwake] = useState(false);
+  const [fromLongdo, setFromLongdo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState("");
-  const skipNearwake = useRef(false);
+  const skipLongdo = useRef(false);
   const lastQuery = useRef("");
   const [searchTick, setSearchTick] = useState(0);
 
@@ -52,19 +52,19 @@ export function PlaceSearch({
     const q = value.trim();
     if (q.length < 2 || disabled || !suggestionsEnabled) {
       setSuggestions([]);
-      setFromNearwake(false);
+      setFromLongdo(false);
       setError("");
       return;
     }
     const handle = window.setTimeout(() => {
       lastQuery.current = q;
       setBusy(true);
-      void suggestPlaces(q, { skipNearwake: skipNearwake.current }).then((res) => {
+      void suggestPlaces(q, { skipLongdo: skipLongdo.current }).then((res) => {
         if (lastQuery.current !== q) return;
         setBusy(false);
-        skipNearwake.current = false;
+        skipLongdo.current = false;
         setSuggestions(res.suggestions);
-        setFromNearwake(res.fromNearwake);
+        setFromLongdo(res.fromLongdo);
         setError(res.error ?? "");
       });
     }, 500);
@@ -81,7 +81,7 @@ export function PlaceSearch({
       return;
     }
     setSuggestions([]);
-    setFromNearwake(false);
+    setFromLongdo(false);
     onChange(place.name);
     onResolved(place);
   }
@@ -124,18 +124,18 @@ export function PlaceSearch({
               </button>
             </li>
           ))}
-          {fromNearwake ? (
+          {fromLongdo ? (
             <li>
               <button
                 type="button"
                 className="w-full px-3 py-2 text-left text-sm font-semibold text-[#4A89EA]"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  skipNearwake.current = true;
+                  skipLongdo.current = true;
                   setSearchTick((n) => n + 1);
                 }}
               >
-                {t("searchFromMapInstead")}
+                {t("searchFromGoogleInstead")}
               </button>
             </li>
           ) : null}

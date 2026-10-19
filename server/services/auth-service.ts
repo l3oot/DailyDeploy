@@ -7,6 +7,7 @@ import { randomRefreshToken, signAccessToken } from "../lib/jwt";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { auth0Configured, auth0ErrorMessage, exchangeOtp, startPasswordless } from "./auth0";
 import { verifyGoogleAccessToken, verifyGoogleIdToken } from "./google";
+import { ensureUserPlan } from "./plan-service";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -42,6 +43,7 @@ async function issueSession(
   pictureUrl?: string,
 ): Promise<TokenPayload> {
   const db = getDb();
+  await ensureUserPlan(authUuid);
   await revokeActiveRefresh(authUuid);
   const { token, expiration } = await signAccessToken(authUuid, email);
   const refresh = randomRefreshToken();
@@ -111,12 +113,14 @@ export async function registerUser(
     return fail("Email already exists", TypeError.Conflict);
   }
   const createdAt = new Date();
+  const authUuid = crypto.randomUUID();
   await db.insert(auth).values({
-    authUuid: crypto.randomUUID(),
+    authUuid,
     authEmail: email,
     authPassword: await hashPassword(password),
     authCreateat: createdAt,
   });
+  await ensureUserPlan(authUuid);
   return ok(
     { authEmail: email, createdAt: createdAt.toISOString() },
     "Registration successful",

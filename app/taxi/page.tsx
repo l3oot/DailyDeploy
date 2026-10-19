@@ -9,6 +9,8 @@ import { TaxiRouteMap } from "@/components/taxi-route-map";
 import { TopoPattern } from "@/components/topo-pattern";
 import { fetchDrivingRoute } from "@/lib/google-routes";
 import { useI18n } from "@/lib/i18n/provider";
+import { consumeFeature, peekFeatureUsage } from "@/lib/plan-api";
+import type { FeatureUsageSnapshot } from "@/lib/plans";
 import { computeTaxiFare, haversineKm, type TaxiFareResult } from "@/lib/taxi";
 
 type Point = { lat: number; lng: number };
@@ -31,13 +33,22 @@ export default function TaxiPage() {
   const [routePath, setRoutePath] = useState<Point[]>([]);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeFallback, setRouteFallback] = useState(false);
+  const [calculating, setCalculating] = useState(false);
+  const [taxiUsage, setTaxiUsage] = useState<FeatureUsageSnapshot | null>(null);
   const odBoxRef = useRef<HTMLDivElement>(null);
 
   const originLat = origin?.lat ?? null;
   const originLng = origin?.lng ?? null;
   const destLat = dest?.lat ?? null;
   const destLng = dest?.lng ?? null;
-  const canCalculate = routeKm != null && !routeLoading && origin != null && dest != null;
+  const canCalculate =
+    routeKm != null && !routeLoading && origin != null && dest != null && !calculating;
+
+  useEffect(() => {
+    void peekFeatureUsage("taxi").then((usage) => {
+      if (usage) setTaxiUsage(usage);
+    });
+  }, []);
 
   useEffect(() => {
     if (
@@ -111,7 +122,7 @@ export default function TaxiPage() {
     );
   }
 
-  function calculate() {
+  async function calculate() {
     if (originLat == null || originLng == null) {
       setNeedMessage(t("taxiFareSelectOrigin"));
       setResult(null);
@@ -122,6 +133,29 @@ export default function TaxiPage() {
       setResult(null);
       return;
     }
+    if (calculating) return;
+    setCalculating(true);
+    const consumed = await consumeFeature("taxi");
+    setCalculating(false);
+    if (!consumed.ok) {
+      setResult(null);
+      if (consumed.reason === "quota") {
+        setNeedMessage(t("planQuotaExceededTaxi"));
+        setTaxiUsage((prev) =>
+          prev ? { ...prev, used: prev.quota, remaining: 0 } : prev,
+        );
+        return;
+      }
+      setNeedMessage(
+        consumed.reason === "auth" ? t("planQuotaAuthRequired") : consumed.message,
+      );
+      return;
+    }
+    setTaxiUsage({
+      used: consumed.used,
+      quota: consumed.quota,
+      remaining: consumed.remaining,
+    });
     setNeedMessage("");
     setResult(
       computeTaxiFare({
@@ -292,7 +326,8 @@ export default function TaxiPage() {
 
         <button
           type="button"
-          onClick={calculate}
+          onClick={() => void calculate()}
+          disabled={!canCalculate}
           className={`relative mt-3 w-full overflow-hidden rounded-2xl bg-[#C33E83] py-3.5 text-lg font-extrabold text-white ${
             canCalculate ? "" : "opacity-50"
           }`}
@@ -306,6 +341,12 @@ export default function TaxiPage() {
           />
           <span className="relative z-10">{t("taxiFareCalculate")}</span>
         </button>
+
+        {taxiUsage ? (
+          <p className="mt-2 text-center text-xs text-[#8E8E93]">
+            {t("planUsageRemaining")} {taxiUsage.used}/{taxiUsage.quota} {t("planTimesUnit")}
+          </p>
+        ) : null}
 
         {needMessage ? <p className="mt-3 text-sm text-[#C33E83]">{needMessage}</p> : null}
 

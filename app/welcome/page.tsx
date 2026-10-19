@@ -2,15 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ButtonWave, WaveBackground } from "@/components/wave-bg";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { setGuest } from "@/lib/guest";
 import { useI18n } from "@/lib/i18n/provider";
 
 export default function WelcomePage() {
   const { t } = useI18n();
-  const router = useRouter();
 
   return (
     <main className="relative flex min-h-dvh flex-col overflow-hidden">
@@ -36,16 +33,6 @@ export default function WelcomePage() {
           <ButtonWave />
           <span className="relative">{t("welcomeSignIn")}</span>
         </Link>
-        <button
-          type="button"
-          className="mt-4 w-full py-2 text-[15px] font-semibold tracking-wide text-[#4A89EA]"
-          onClick={() => {
-            setGuest(true);
-            router.replace("/home");
-          }}
-        >
-          {t("welcomeContinueGuest")}
-        </button>
       </div>
     </main>
   );

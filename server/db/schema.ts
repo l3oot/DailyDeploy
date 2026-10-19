@@ -28,6 +28,45 @@ export const users = pgTable("user", {
     .references(() => auth.authUuid),
 });
 
+export const plan = pgTable("plan", {
+  planCode: varchar("plan_code", { length: 16 }).primaryKey(),
+  planName: varchar("plan_name", { length: 32 }).notNull(),
+  priceMonth: integer("price_month").notNull(),
+  taxiQuota: integer("taxi_quota").notNull(),
+  nearwakeQuota: integer("nearwake_quota").notNull(),
+});
+
+export const userPlan = pgTable("user_plan", {
+  authUuid: uuid("auth_uuid")
+    .primaryKey()
+    .references(() => auth.authUuid),
+  planCode: varchar("plan_code", { length: 16 })
+    .notNull()
+    .references(() => plan.planCode),
+  selectedAt: timestamp("selected_at", { withTimezone: true }).notNull(),
+});
+
+export const featureUsage = pgTable(
+  "feature_usage",
+  {
+    usageUuid: uuid("usage_uuid").primaryKey(),
+    authUuid: uuid("auth_uuid")
+      .notNull()
+      .references(() => auth.authUuid),
+    featureKey: varchar("feature_key", { length: 32 }).notNull(),
+    periodYm: varchar("period_ym", { length: 7 }).notNull(),
+    usedCount: integer("used_count").notNull().default(0),
+  },
+  (t) => [
+    unique("feature_usage_auth_feature_period").on(
+      t.authUuid,
+      t.featureKey,
+      t.periodYm,
+    ),
+    index("feature_usage_auth_period_idx").on(t.authUuid, t.periodYm),
+  ],
+);
+
 export const refreshToken = pgTable("refresh_token", {
   refreshTokensUuid: uuid("refresh_tokens_uuid").primaryKey(),
   authUuid: uuid("auth_uuid")

@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import { distanceMeters, formatDistanceMeters } from "@/lib/geofence";
 import { useI18n } from "@/lib/i18n/provider";
 import { requestAlarmPermission } from "@/lib/near-alarm";
+import { consumeFeature, peekFeatureUsage } from "@/lib/plan-api";
+import type { FeatureUsageSnapshot } from "@/lib/plans";
 import { persistStorePlace, type ResolvedPlace } from "@/lib/places";
 import { useTracking } from "@/lib/tracking-session";
 
@@ -46,7 +48,14 @@ function NearwakeMapInner() {
   const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS);
   const [notifyOnExit, setNotifyOnExit] = useState(false);
   const [recenterToken, setRecenterToken] = useState(0);
+  const [nearwakeUsage, setNearwakeUsage] = useState<FeatureUsageSnapshot | null>(null);
   const gps = tracking.gps;
+
+  useEffect(() => {
+    void peekFeatureUsage("nearwake").then((usage) => {
+      if (usage) setNearwakeUsage(usage);
+    });
+  }, []);
 
   useEffect(() => {
     const lat = Number(params.get("lat"));
@@ -177,6 +186,25 @@ function NearwakeMapInner() {
       return;
     }
     await requestAlarmPermission();
+    const consumed = await consumeFeature("nearwake");
+    if (!consumed.ok) {
+      if (consumed.reason === "quota") {
+        setToast(t("planQuotaExceededNearwake"));
+        setNearwakeUsage((prev) =>
+          prev ? { ...prev, used: prev.quota, remaining: 0 } : prev,
+        );
+        return;
+      }
+      setToast(
+        consumed.reason === "auth" ? t("planQuotaAuthRequired") : consumed.message,
+      );
+      return;
+    }
+    setNearwakeUsage({
+      used: consumed.used,
+      quota: consumed.quota,
+      remaining: consumed.remaining,
+    });
     tracking.start({
       dest: {
         lat: dest.lat,
@@ -340,6 +368,12 @@ function NearwakeMapInner() {
           >
             {tracking.active ? t("mapStopTracking") : t("mapStartTracking")}
           </button>
+          {nearwakeUsage ? (
+            <p className="mt-2 text-center text-[11px] text-[#8E8E93]">
+              {t("planUsageRemaining")} {nearwakeUsage.used}/{nearwakeUsage.quota}{" "}
+              {t("planTimesUnit")}
+            </p>
+          ) : null}
           <p className="mt-2 text-center text-[11px] text-[#8E8E93]">{t("mapKeepTabOpen")}</p>
         </section>
       ) : null}

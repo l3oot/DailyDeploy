@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type SessionUser } from "@/lib/api";
-import { isGuest } from "@/lib/guest";
 import { useI18n } from "@/lib/i18n/provider";
 
 export default function SessionStartPage() {
@@ -15,10 +14,6 @@ export default function SessionStartPage() {
     let cancelled = false;
 
     async function boot() {
-      if (isGuest()) {
-        router.replace("/home");
-        return;
-      }
       try {
         let me = await api<SessionUser>("/api/v1/auth/me");
         if (me.status === 401) {

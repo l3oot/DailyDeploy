@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AccountPlans } from "@/components/account-plans";
 import { AppFooter } from "@/components/app-footer";
 import { BentoWave } from "@/components/bento-wave";
 import { LanguageRowSelector } from "@/components/language-switcher";
@@ -12,6 +13,8 @@ import { formatAccountBirthdate, fromBirthInputValue, toBirthInputValue } from "
 import { isValidThaiMobile, nextThaiMobileInput } from "@/lib/phone";
 import { isGuest, setGuest } from "@/lib/guest";
 import { useI18n } from "@/lib/i18n/provider";
+import { fetchPlanOverview } from "@/lib/plan-api";
+import type { PlanOverview } from "@/lib/plans";
 
 type UserProfile = {
   userUuid: string;
@@ -30,7 +33,9 @@ export default function AccountPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<0 | 1>(0);
+  const [tab, setTab] = useState<0 | 1 | 2>(0);
+  const [planOverview, setPlanOverview] = useState<PlanOverview | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -68,7 +73,13 @@ export default function AccountPage() {
     }
     setSession(me.body.data);
     setResolved(true);
-    const users = await api<UserProfile>(`/api/v1/users/${me.body.data.authUuid}`);
+    setPlanLoading(true);
+    const [users, plans] = await Promise.all([
+      api<UserProfile>(`/api/v1/users/${me.body.data.authUuid}`),
+      fetchPlanOverview(),
+    ]);
+    setPlanOverview(plans);
+    setPlanLoading(false);
     if (users.status === 404 || users.body.errorType === 4) {
       setMissing(true);
       setProfile(null);
@@ -163,6 +174,15 @@ export default function AccountPage() {
                 <Avatar url={session?.pictureUrl} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xl font-bold">{displayName}</p>
+                  {planOverview?.mine ? (
+                    <p className="mt-0.5 text-xs font-semibold text-[#4A89EA]">
+                      {planOverview.mine.planCode === "plus"
+                        ? t("planNamePlus")
+                        : planOverview.mine.planCode === "pro"
+                          ? t("planNamePro")
+                          : t("planNameFree")}
+                    </p>
+                  ) : null}
                   {!editing && !loading && !error ? (
                     <button
                       type="button"
@@ -179,25 +199,40 @@ export default function AccountPage() {
               </div>
 
               <div className="mt-5 rounded-full bg-[#ECECEF] p-1">
-                <div className="grid grid-cols-2">
+                <div className="grid grid-cols-3">
                   <TabButton
                     label={t("accountTabGeneral")}
                     selected={tab === 0}
                     onClick={() => setTab(0)}
                   />
                   <TabButton
-                    label={t("accountTabSettings")}
+                    label={t("accountTabPlan")}
                     selected={tab === 1}
                     onClick={() => {
                       setEditing(false);
                       setTab(1);
                     }}
                   />
+                  <TabButton
+                    label={t("accountTabSettings")}
+                    selected={tab === 2}
+                    onClick={() => {
+                      setEditing(false);
+                      setTab(2);
+                    }}
+                  />
                 </div>
               </div>
 
               <div className="mt-4">
-                {error ? (
+                {tab === 1 ? (
+                  <AccountPlans
+                    overview={planOverview}
+                    loading={planLoading}
+                    onUpdated={setPlanOverview}
+                    onToast={showToast}
+                  />
+                ) : error ? (
                   <div className="py-4 text-center">
                     <p className="text-sm text-[#8E8E93]">{error}</p>
                     <button
@@ -296,7 +331,7 @@ export default function AccountPage() {
           )}
         </section>
 
-        {loggedIn && tab === 1 ? (
+        {loggedIn && tab === 2 ? (
           <div className="mt-5 space-y-3">
             <Link
               href="/settings/notifications"
@@ -372,7 +407,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full py-2.5 text-sm font-semibold ${
+      className={`rounded-full py-2.5 text-[13px] font-semibold ${
         selected ? "bg-[#29292E] text-white" : "text-[#1A1A1A]"
       }`}
     >

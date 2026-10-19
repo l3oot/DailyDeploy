@@ -4,7 +4,7 @@ export type PlaceSuggestion = {
   placeId: string;
   text: string;
   detail: string;
-  source: "nearwake" | "ggmap";
+  source: "nearwake" | "ggmap" | "longdo";
   lat?: number;
   lon?: number;
   storeplaceUuid?: string;
@@ -18,63 +18,45 @@ export type ResolvedPlace = {
   storeplaceUuid?: string;
 };
 
-type GgmapPayload = {
-  suggestions?: Array<{ placeId?: string; text?: string; detail?: string }>;
-};
-
-type NearwakeLocation = {
-  storeplaceUuid?: string;
-  placeId?: string;
-  placeName?: string;
-  placeDetail?: string;
-  placeLat?: number;
-  placeLon?: number;
+type SearchPayload = {
+  source?: "longdo" | "ggmap";
+  suggestions?: Array<{
+    placeId?: string;
+    text?: string;
+    detail?: string;
+    source?: PlaceSuggestion["source"];
+    lat?: number;
+    lon?: number;
+  }>;
 };
 
 export async function suggestPlaces(
   input: string,
-  opts?: { skipNearwake?: boolean },
-): Promise<{ suggestions: PlaceSuggestion[]; fromNearwake: boolean; error?: string }> {
+  opts?: { skipLongdo?: boolean },
+): Promise<{ suggestions: PlaceSuggestion[]; fromLongdo: boolean; error?: string }> {
   const q = input.trim();
-  if (q.length < 2) return { suggestions: [], fromNearwake: false };
+  if (q.length < 2) return { suggestions: [], fromLongdo: false };
 
-  if (!opts?.skipNearwake) {
-    const nw = await api<NearwakeLocation[]>(
-      `/api/v1/nearwake/location?PlaceName=${encodeURIComponent(q)}`,
-    );
-    if (nw.body.isSuccess && nw.body.data?.length) {
-      return {
-        fromNearwake: true,
-        suggestions: nw.body.data.slice(0, 8).map((row) => ({
-          placeId: row.placeId ?? "",
-          text: row.placeName ?? "",
-          detail: row.placeDetail ?? "",
-          source: "nearwake" as const,
-          lat: row.placeLat,
-          lon: row.placeLon,
-          storeplaceUuid: row.storeplaceUuid,
-        })),
-      };
-    }
-  }
-
-  const gg = await api<GgmapPayload>(
-    `/api/v1/ggmap/location?input=${encodeURIComponent(q)}`,
-  );
-  if (!gg.body.isSuccess) {
+  const params = new URLSearchParams({ input: q });
+  if (opts?.skipLongdo) params.set("skipLongdo", "1");
+  const res = await api<SearchPayload>(`/api/v1/places/search?${params.toString()}`);
+  if (!res.body.isSuccess) {
     return {
       suggestions: [],
-      fromNearwake: false,
-      error: gg.body.errorMessage || gg.body.message,
+      fromLongdo: false,
+      error: res.body.errorMessage || res.body.message,
     };
   }
+  const source = res.body.data?.source === "longdo" ? "longdo" : "ggmap";
   return {
-    fromNearwake: false,
-    suggestions: (gg.body.data?.suggestions ?? []).map((row) => ({
+    fromLongdo: source === "longdo",
+    suggestions: (res.body.data?.suggestions ?? []).map((row) => ({
       placeId: row.placeId ?? "",
       text: row.text ?? "",
       detail: row.detail ?? "",
-      source: "ggmap" as const,
+      source: row.source === "longdo" ? "longdo" : source,
+      lat: row.lat,
+      lon: row.lon,
     })),
   };
 }
@@ -122,8 +104,14 @@ export async function resolveSelectedPlace(
       placeDetail: suggestion.detail,
       source: suggestion.source,
       persist: suggestion.source !== "nearwake",
-      knownLat: suggestion.source === "nearwake" ? suggestion.lat : undefined,
-      knownLon: suggestion.source === "nearwake" ? suggestion.lon : undefined,
+      knownLat:
+        suggestion.source === "nearwake" || suggestion.source === "longdo"
+          ? suggestion.lat
+          : undefined,
+      knownLon:
+        suggestion.source === "nearwake" || suggestion.source === "longdo"
+          ? suggestion.lon
+          : undefined,
     }),
   });
   if (!body.isSuccess || !body.data) {

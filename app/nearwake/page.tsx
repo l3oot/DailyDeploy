@@ -26,6 +26,15 @@ export default function NearwakePage() {
   const [needLogin, setNeedLogin] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState<FavoritePlace[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
+
+  function showToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 2200);
+  }
 
   async function load() {
     if (isGuest()) {
@@ -60,7 +69,54 @@ export default function NearwakePage() {
 
   async function remove(uuid: string) {
     const res = await api(`/api/v1/nearwake/favoriteplace/${uuid}`, { method: "DELETE" });
-    if (res.body.isSuccess) setItems((rows) => rows.filter((row) => row.favoritePlaceUuid !== uuid));
+    if (res.body.isSuccess) {
+      setItems((rows) => rows.filter((row) => row.favoritePlaceUuid !== uuid));
+      if (editingId === uuid) {
+        setEditingId(null);
+        setEditName("");
+      }
+    }
+  }
+
+  function startRename(item: FavoritePlace) {
+    setEditingId(item.favoritePlaceUuid);
+    setEditName(item.favoritePlaceName || item.placeName);
+  }
+
+  function cancelRename() {
+    setEditingId(null);
+    setEditName("");
+  }
+
+  async function saveRename(uuid: string) {
+    const name = editName.trim();
+    if (!name) {
+      showToast(t("favoritePlaceNameRequired"));
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    const res = await api<{ favoritePlaceUuid: string; favoritePlaceName: string }>(
+      "/api/v1/nearwake/favoriteplace",
+      {
+        method: "PUT",
+        body: JSON.stringify({ favoritePlaceUuid: uuid, favoritePlaceName: name }),
+      },
+    );
+    setSaving(false);
+    if (!res.body.isSuccess || !res.body.data) {
+      showToast(res.body.errorMessage || t("favoritePlaceRenameFailed"));
+      return;
+    }
+    const nextName = res.body.data.favoritePlaceName;
+    setItems((rows) =>
+      rows.map((row) =>
+        row.favoritePlaceUuid === uuid ? { ...row, favoritePlaceName: nextName } : row,
+      ),
+    );
+    setEditingId(null);
+    setEditName("");
+    showToast(t("favoritePlaceRenamed"));
   }
 
   return (
@@ -104,37 +160,116 @@ export default function NearwakePage() {
                 item.favoritePlaceName || item.placeName,
               )}&storeplaceUuid=${encodeURIComponent(item.storeplaceUuid)}`;
               const bg = ["bg-[#ECECFF]", "bg-[#FDF2D9]", "bg-[#3A3A3E] text-white"][index % 3];
+              const editing = editingId === item.favoritePlaceUuid;
               return (
                 <li key={item.favoritePlaceUuid} className="flex items-stretch gap-2">
-                  <Link href={href} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm">
-                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-                      ★
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">
-                        {item.favoritePlaceName || item.placeName}
+                  {editing ? (
+                    <form
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveRename(item.favoritePlaceUuid);
+                      }}
+                    >
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg}`}>
+                        ★
                       </span>
-                      {item.placeDetail ? (
-                        <span className="block truncate text-xs text-[#8E8E93]">{item.placeDetail}</span>
-                      ) : null}
-                    </span>
-                  </Link>
-                  <button
-                    type="button"
-                    aria-label={t("deleteFavoritePlace")}
-                    className="flex items-center justify-center rounded-2xl bg-[#E5484D] px-3 text-white"
-                    onClick={() => void remove(item.favoritePlaceUuid)}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path
-                        d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        maxLength={150}
+                        autoFocus
+                        aria-label={t("renameFavoritePlace")}
+                        className="min-w-0 flex-1 bg-transparent font-semibold"
                       />
-                    </svg>
-                  </button>
+                    </form>
+                  ) : (
+                    <Link href={href} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm">
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg}`}>
+                        ★
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {item.favoritePlaceName || item.placeName}
+                        </span>
+                        {item.placeDetail ? (
+                          <span className="block truncate text-xs text-[#8E8E93]">{item.placeDetail}</span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  )}
+                  {editing ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        aria-label={t("accountSave")}
+                        className="flex items-center justify-center rounded-2xl bg-[#4A89EA] px-3 text-white disabled:opacity-70"
+                        onClick={() => void saveRename(item.favoritePlaceUuid)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M5 12.5 10 17.5 19 7.5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        aria-label={t("cancel")}
+                        className="flex items-center justify-center rounded-2xl bg-[#ECECEF] px-3 text-[#29292E]"
+                        onClick={cancelRename}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M7 7l10 10M17 7 7 17"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={t("renameFavoritePlace")}
+                        className="flex items-center justify-center rounded-2xl bg-[#ECECFF] px-3 text-[#4A89EA]"
+                        onClick={() => startRename(item)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Zm11.2-13.7 3 3"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t("deleteFavoritePlace")}
+                        className="flex items-center justify-center rounded-2xl bg-[#E5484D] px-3 text-white"
+                        onClick={() => void remove(item.favoritePlaceUuid)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </li>
               );
             })}
@@ -156,6 +291,12 @@ export default function NearwakePage() {
           {t("favoritePlacesOpenMap")}
         </Link>
       </div>
+
+      {toast ? (
+        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#29292E] px-4 py-2 text-sm text-white">
+          {toast}
+        </div>
+      ) : null}
     </main>
   );
 }

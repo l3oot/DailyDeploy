@@ -6,6 +6,8 @@ export const TypeError = {
   NotFound: 4,
   InternalError: 5,
   Conflict: 6,
+  TooManyRequests: 7,
+  QuotaExceeded: 8,
 } as const;
 
 export type TypeErrorCode = (typeof TypeError)[keyof typeof TypeError];
@@ -27,10 +29,10 @@ export function ok<T>(data: T, message = "Success"): ApiResponse<T> {
   };
 }
 
-export function fail(
+export function fail<T = null>(
   errorMessage: string,
   errorType: TypeErrorCode,
-): ApiResponse<null> {
+): ApiResponse<T> {
   return {
     isSuccess: false,
     errorMessage,
@@ -51,6 +53,9 @@ export function statusFor(errorType: TypeErrorCode): number {
       return 404;
     case TypeError.Conflict:
       return 409;
+    case TypeError.TooManyRequests:
+    case TypeError.QuotaExceeded:
+      return 429;
     case TypeError.InternalError:
       return 500;
     default:

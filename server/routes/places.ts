@@ -3,13 +3,20 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { fail, statusFor, TypeError, type ApiResponse } from "../lib/api-response";
 import { optionalAuth } from "../lib/auth-guard";
 import { pickNumber, pickString, readJson } from "../lib/body";
-import { resolvePlace } from "../services/places-service";
+import { resolvePlace, searchPlaces } from "../services/places-service";
 
 const placesRoutes = new Hono();
 
 function respond<T>(c: Context, body: ApiResponse<T>) {
   return c.json(body, body.isSuccess ? 200 : (statusFor(body.errorType) as ContentfulStatusCode));
 }
+
+placesRoutes.get("/search", async (c) => {
+  const input = (c.req.query("input") ?? c.req.query("keyword") ?? "").trim();
+  const skipLongdo =
+    c.req.query("skipLongdo") === "1" || c.req.query("skipLongdo") === "true";
+  return respond(c, await searchPlaces({ query: input, skipLongdo }));
+});
 
 placesRoutes.post("/resolve", async (c) => {
   const body = await readJson(c.req.raw);
@@ -30,6 +37,7 @@ placesRoutes.post("/resolve", async (c) => {
       placeDetail: pickString(body, "placeDetail", "detail") || undefined,
       knownLat: pickNumber(body, "knownLat", "lat", "placeLat"),
       knownLon: pickNumber(body, "knownLon", "lon", "lng", "placeLon"),
+      source: pickString(body, "source") || undefined,
       persist: persist && auth.ok,
     }),
   );
