@@ -76,8 +76,9 @@ function NearwakeMapInner() {
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation) setError(t("mapGpsDenied"));
-  }, [t]);
+    if (!navigator.geolocation || tracking.gpsDenied) setError(t("mapGpsDenied"));
+    else setError("");
+  }, [t, tracking.gpsDenied]);
 
   useEffect(() => {
     if (!toast) return;
@@ -228,12 +229,12 @@ function NearwakeMapInner() {
           onLongPress={onMapLongPress}
           recenterToken={recenterToken}
         />
-        {!gps && !dest && !error ? (
+        {!gps && !error ? (
           <div className="pointer-events-none absolute inset-x-0 top-20 z-10 text-center text-sm font-medium text-[#29292E]">
             {t("mapWaitingGps")}
           </div>
         ) : null}
-        {error && !dest ? (
+        {error ? (
           <div className="absolute inset-x-4 top-20 z-10 rounded-xl bg-white/90 px-3 py-2 text-center text-sm text-[#C33E83]">
             {error}
           </div>

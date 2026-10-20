@@ -66,7 +66,8 @@ export const messages = {
     favoritePlacesLoginPrompt: "กรุณาเข้าสู่ระบบเพื่อดูสถานที่โปรด",
     favoritePlacesEmpty: "ยังไม่มีสถานที่โปรด\nบันทึกได้จากหน้าแผนที่ (ไอคอนหัวใจ)",
     favoritePlacesOpenMap: "เปิดแผนที่เพื่อค้นหาปลายทาง",
-    mapKeepTabOpen: "เปิดหน้านี้ค้างไว้จนกว่าจะถึง — เว็บติดตามได้ขณะแท็บเปิดอยู่",
+    mapKeepTabOpen:
+      "ใช้ GPS ของเบราว์เซอร์ — อย่าปัดปิดแท็บนี้ ถ้าสลับแอประบบจะตามตำแหน่งต่อเมื่อเบราว์เซอร์ยังทำงาน และจะตรวจทันทีเมื่อกลับมา",
     mapWaitingGps: "กำลังอ่านตำแหน่ง GPS…",
     mapGpsDenied: "ไม่สามารถอ่านตำแหน่งได้ — อนุญาตตำแหน่งในเบราว์เซอร์",
     toiletMapTitle: "ห้องน้ำตรงใจ",
@@ -326,7 +327,8 @@ export const messages = {
     favoritePlacesLoginPrompt: "Sign in to see your favorite places",
     favoritePlacesEmpty: "No favorites yet.\nSave one from the map (heart icon).",
     favoritePlacesOpenMap: "Open map to search destination",
-    mapKeepTabOpen: "Keep this tab open until you arrive — tracking works while the page is visible.",
+    mapKeepTabOpen:
+      "Uses the browser Geolocation API — don’t swipe the tab away. Tracking continues while the browser stays running, and checks again as soon as you return.",
     mapWaitingGps: "Reading GPS…",
     mapGpsDenied: "Cannot read location — allow location in the browser",
     toiletMapTitle: "Restroom finder",

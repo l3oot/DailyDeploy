@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { distanceMeters, isInsideGeofence } from "./geofence";
+import { startGeoWatch, startScreenWakeLock } from "./geo-watch";
 import { useI18n } from "./i18n/provider";
 import { startNearAlarm, stopNearAlarm } from "./near-alarm";
 
@@ -36,6 +37,7 @@ type TrackingContextValue = {
   radiusMeters: number;
   notifyOnExit: boolean;
   gps: { lat: number; lng: number } | null;
+  gpsDenied: boolean;
   metersAway: number | null;
   alarming: boolean;
   mapVisible: boolean;
@@ -49,11 +51,15 @@ const TrackingContext = createContext<TrackingContextValue | null>(null);
 
 function loadPersist(): PersistShape | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as PersistShape;
     if (!data?.dest || !Number.isFinite(data.dest.lat) || !Number.isFinite(data.dest.lon)) {
       return null;
+    }
+    if (!localStorage.getItem(STORAGE_KEY)) {
+      localStorage.setItem(STORAGE_KEY, raw);
+      sessionStorage.removeItem(STORAGE_KEY);
     }
     return data;
   } catch {
@@ -63,10 +69,13 @@ function loadPersist(): PersistShape | null {
 
 function savePersist(data: PersistShape | null) {
   if (!data) {
+    localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
     return;
   }
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  const raw = JSON.stringify(data);
+  localStorage.setItem(STORAGE_KEY, raw);
+  sessionStorage.removeItem(STORAGE_KEY);
 }
 
 export function TrackingProvider({ children }: { children: ReactNode }) {
@@ -76,6 +85,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [radiusMeters, setRadiusMeters] = useState(500);
   const [notifyOnExit, setNotifyOnExit] = useState(false);
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsDenied, setGpsDenied] = useState(false);
   const [alarming, setAlarming] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const insideRef = useRef(false);
@@ -102,14 +112,22 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const watching = active || mapVisible;
 
   useEffect(() => {
-    if (!watching || !navigator.geolocation) return;
-    const watch = navigator.geolocation.watchPosition(
-      (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => undefined,
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
-    );
-    return () => navigator.geolocation.clearWatch(watch);
+    if (!watching) return;
+    return startGeoWatch({
+      onPosition: (point) => {
+        setGpsDenied(false);
+        setGps((prev) => (prev && prev.lat === point.lat && prev.lng === point.lng ? prev : point));
+      },
+      onError: (denied) => {
+        if (denied) setGpsDenied(true);
+      },
+    });
   }, [watching]);
+
+  useEffect(() => {
+    if (!active) return;
+    return startScreenWakeLock();
+  }, [active]);
 
   useEffect(() => {
     if (!active || !gps || !dest) return;
@@ -200,6 +218,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       radiusMeters,
       notifyOnExit,
       gps,
+      gpsDenied,
       metersAway,
       alarming,
       mapVisible,
@@ -214,6 +233,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       radiusMeters,
       notifyOnExit,
       gps,
+      gpsDenied,
       metersAway,
       alarming,
       mapVisible,
