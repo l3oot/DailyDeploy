@@ -9,7 +9,7 @@ import { useTracking } from "@/lib/tracking-session";
 export function TrackingWidget() {
   const { t } = useI18n();
   const path = usePathname();
-  const { active, dest, metersAway, alarming, notifyOnExit, stop, dismissAlarm } = useTracking();
+  const { active, dest, metersAway, stop } = useTracking();
 
   if (!active || !dest || path.startsWith("/nearwake/map")) return null;
 
@@ -20,20 +20,6 @@ export function TrackingWidget() {
 
   return (
     <div className={`fixed inset-x-3 z-40 ${aboveFooter ? "bottom-24" : "bottom-4"}`}>
-      {alarming ? (
-        <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl bg-[#29292E] px-4 py-2.5 text-white shadow-lg">
-          <p className="truncate text-sm font-semibold">
-            {notifyOnExit ? t("mapAlarmExitTitle") : t("mapAlarmTitle")}
-          </p>
-          <button
-            type="button"
-            onClick={dismissAlarm}
-            className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#29292E]"
-          >
-            {t("mapDismissAlarm")}
-          </button>
-        </div>
-      ) : null}
       <div className="flex items-center gap-3 rounded-2xl bg-[#29292E] px-4 py-3 text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
         <Link href={href} className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold tracking-wide text-[#9CA3AF] uppercase">

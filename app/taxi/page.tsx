@@ -214,6 +214,7 @@ export default function TaxiPage() {
               <PlaceSearch
                 value={originLabel}
                 suggestionsEnabled={!origin}
+                showInlineStatus={false}
                 menuAnchorRef={odBoxRef}
                 onChange={(next) => {
                   setOriginLabel(next);
@@ -233,6 +234,7 @@ export default function TaxiPage() {
               <PlaceSearch
                 value={destLabel}
                 suggestionsEnabled={!dest}
+                showInlineStatus={false}
                 menuAnchorRef={odBoxRef}
                 onChange={(next) => {
                   setDestLabel(next);

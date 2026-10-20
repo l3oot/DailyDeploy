@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { formatAlarmRadius } from "@/lib/geofence";
 import { useI18n } from "@/lib/i18n/provider";
 import { selectPlan } from "@/lib/plan-api";
-import type { PlanCode, PlanInfo, PlanOverview } from "@/lib/plans";
+import { nearwakeRadiusMaxMeters, type PlanCode, type PlanInfo, type PlanOverview } from "@/lib/plans";
 
 export function AccountPlans({
   overview,
@@ -158,6 +159,10 @@ function PlanCard({
       <ul className="mt-3 space-y-1.5 text-sm text-[#29292E]">
         <li>
           {t("planFeatureNearwake")} {plan.nearwakeQuota} {t("planTimesPerMonth")}
+        </li>
+        <li>
+          {t("planNearwakeRadius")}{" "}
+          {formatAlarmRadius(nearwakeRadiusMaxMeters(plan.planCode), t("taxiFareKm"), t("mapRadiusMeters"))}
         </li>
         <li>
           {t("planFeatureTaxi")} {plan.taxiQuota} {t("planTimesPerMonth")}

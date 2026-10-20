@@ -1,22 +1,26 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { NearwakeLeafletMap } from "@/components/nearwake-leaflet-map";
 import { PageBack } from "@/components/page-back";
 import { PlaceSearch } from "@/components/place-search";
 import { api } from "@/lib/api";
-import { distanceMeters, formatDistanceMeters } from "@/lib/geofence";
+import { distanceMeters, formatAlarmRadius, formatDistanceMeters } from "@/lib/geofence";
+import { isGuest } from "@/lib/guest";
 import { useI18n } from "@/lib/i18n/provider";
 import { requestAlarmPermission } from "@/lib/near-alarm";
-import { consumeFeature, peekFeatureUsage } from "@/lib/plan-api";
-import type { FeatureUsageSnapshot } from "@/lib/plans";
+import { fetchPlanOverview, peekFeatureUsage } from "@/lib/plan-api";
+import {
+  clampNearwakeRadius,
+  NEARWAKE_RADIUS_DEFAULT_METERS,
+  NEARWAKE_RADIUS_MIN_METERS,
+  NEARWAKE_RADIUS_STEP_METERS,
+  nearwakeRadiusMaxMeters,
+  type PlanCode,
+} from "@/lib/plans";
 import { persistStorePlace, type ResolvedPlace } from "@/lib/places";
 import { useTracking } from "@/lib/tracking-session";
-
-const MIN_RADIUS = 50;
-const MAX_RADIUS = 5000;
-const DEFAULT_RADIUS = 500;
 
 export default function NearwakeMapPage() {
   return (
@@ -45,17 +49,13 @@ function NearwakeMapInner() {
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
   const [favoriteName, setFavoriteName] = useState("");
-  const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS);
+  const [radiusMeters, setRadiusMeters] = useState(NEARWAKE_RADIUS_DEFAULT_METERS);
+  const [planCode, setPlanCode] = useState<PlanCode>("free");
   const [notifyOnExit, setNotifyOnExit] = useState(false);
   const [recenterToken, setRecenterToken] = useState(0);
-  const [nearwakeUsage, setNearwakeUsage] = useState<FeatureUsageSnapshot | null>(null);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const gps = tracking.gps;
-
-  useEffect(() => {
-    void peekFeatureUsage("nearwake").then((usage) => {
-      if (usage) setNearwakeUsage(usage);
-    });
-  }, []);
 
   useEffect(() => {
     const lat = Number(params.get("lat"));
@@ -85,6 +85,31 @@ function NearwakeMapInner() {
     const id = window.setTimeout(() => setToast(""), 3200);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (isGuest()) {
+        if (!cancelled) setPlanCode("free");
+        return;
+      }
+      const overview = await fetchPlanOverview();
+      if (cancelled) return;
+      setPlanCode(overview?.mine?.planCode ?? "free");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const maxRadius = nearwakeRadiusMaxMeters(planCode);
+  const planLabel =
+    planCode === "plus" ? t("planNamePlus") : planCode === "pro" ? t("planNamePro") : t("planNameFree");
+
+  useEffect(() => {
+    if (tracking.active) return;
+    setRadiusMeters((current) => clampNearwakeRadius(current, planCode));
+  }, [planCode, tracking.active]);
 
   useEffect(() => {
     if (!tracking.active || !tracking.dest || dest) return;
@@ -178,6 +203,7 @@ function NearwakeMapInner() {
   }
 
   async function toggleTracking() {
+    if (startingRef.current) return;
     if (!dest) {
       setToast(t("mapNeedDestToTrack"));
       return;
@@ -186,36 +212,31 @@ function NearwakeMapInner() {
       tracking.stop();
       return;
     }
-    await requestAlarmPermission();
-    const consumed = await consumeFeature("nearwake");
-    if (!consumed.ok) {
-      if (consumed.reason === "quota") {
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      await requestAlarmPermission();
+      const usage = await peekFeatureUsage("nearwake");
+      if (usage && usage.remaining <= 0) {
         setToast(t("planQuotaExceededNearwake"));
-        setNearwakeUsage((prev) =>
-          prev ? { ...prev, used: prev.quota, remaining: 0 } : prev,
-        );
         return;
       }
-      setToast(
-        consumed.reason === "auth" ? t("planQuotaAuthRequired") : consumed.message,
-      );
-      return;
+      const allowedRadius = clampNearwakeRadius(radiusMeters, planCode);
+      setRadiusMeters(allowedRadius);
+      tracking.start({
+        dest: {
+          lat: dest.lat,
+          lon: dest.lon,
+          name: dest.name,
+          storeplaceUuid: dest.storeplaceUuid,
+        },
+        radiusMeters: allowedRadius,
+        notifyOnExit,
+      });
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
-    setNearwakeUsage({
-      used: consumed.used,
-      quota: consumed.quota,
-      remaining: consumed.remaining,
-    });
-    tracking.start({
-      dest: {
-        lat: dest.lat,
-        lon: dest.lon,
-        name: dest.name,
-        storeplaceUuid: dest.storeplaceUuid,
-      },
-      radiusMeters,
-      notifyOnExit,
-    });
   }
 
   return (
@@ -254,6 +275,7 @@ function NearwakeMapInner() {
             onChange={setQuery}
             onResolved={(place) => void onPlaceResolved(place)}
             placeholder={t("mapSearchHint")}
+            showInlineStatus={false}
           />
         </div>
         <button
@@ -293,31 +315,32 @@ function NearwakeMapInner() {
           </div>
 
           <label className="block text-sm font-semibold text-[#29292E]">
-            {t("mapAlarmRadius")}: {Math.round(radiusMeters)} {t("mapRadiusMeters")}
+            {t("mapAlarmRadius")}:{" "}
+            {formatAlarmRadius(radiusMeters, t("taxiFareKm"), t("mapRadiusMeters"))}
           </label>
           <input
             type="range"
-            min={MIN_RADIUS}
-            max={MAX_RADIUS}
-            step={50}
+            min={NEARWAKE_RADIUS_MIN_METERS}
+            max={tracking.active ? Math.max(maxRadius, radiusMeters) : maxRadius}
+            step={NEARWAKE_RADIUS_STEP_METERS}
             value={radiusMeters}
-            disabled={tracking.active}
-            onChange={(e) => setRadiusMeters(Number(e.target.value))}
+            disabled={tracking.active || starting}
+            onChange={(e) => setRadiusMeters(clampNearwakeRadius(Number(e.target.value), planCode))}
             className="mt-1 w-full accent-[#29292E]"
           />
           <div className="mb-3 flex justify-between text-xs text-[#8E8E93]">
             <span>
-              {MIN_RADIUS} {t("mapRadiusMeters")}
+              {formatAlarmRadius(NEARWAKE_RADIUS_MIN_METERS, t("taxiFareKm"), t("mapRadiusMeters"))}
             </span>
             <span>
-              {MAX_RADIUS} {t("mapRadiusMeters")}
+              {planLabel} {formatAlarmRadius(maxRadius, t("taxiFareKm"), t("mapRadiusMeters"))}
             </span>
           </div>
 
           <div className="mb-3 grid grid-cols-2 gap-2">
             <button
               type="button"
-              disabled={tracking.active}
+              disabled={tracking.active || starting}
               onClick={() => setNotifyOnExit(false)}
               className={`rounded-xl px-3 py-2 text-sm font-semibold ${
                 !notifyOnExit ? "bg-[#E5E7EB] text-[#29292E]" : "bg-white text-[#8E8E93]"
@@ -327,7 +350,7 @@ function NearwakeMapInner() {
             </button>
             <button
               type="button"
-              disabled={tracking.active}
+              disabled={tracking.active || starting}
               onClick={() => setNotifyOnExit(true)}
               className={`rounded-xl px-3 py-2 text-sm font-semibold ${
                 notifyOnExit ? "bg-[#E5E7EB] text-[#29292E]" : "bg-white text-[#8E8E93]"
@@ -362,30 +385,29 @@ function NearwakeMapInner() {
 
           <button
             type="button"
+            disabled={starting}
+            aria-busy={starting}
             onClick={() => void toggleTracking()}
-            className={`relative w-full overflow-hidden rounded-2xl py-3.5 text-base font-semibold text-white ${
+            className={`relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl py-3.5 text-base font-semibold text-white disabled:opacity-70 ${
               tracking.active ? "bg-[#DC2626]" : "bg-[#29292E]"
             }`}
           >
-            {tracking.active ? t("mapStopTracking") : t("mapStartTracking")}
+            {starting ? (
+              <>
+                <span
+                  className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                  aria-hidden
+                />
+                {t("mapStartingTracking")}
+              </>
+            ) : tracking.active ? (
+              t("mapStopTracking")
+            ) : (
+              t("mapStartTracking")
+            )}
           </button>
-          {nearwakeUsage ? (
-            <p className="mt-2 text-center text-[11px] text-[#8E8E93]">
-              {t("planUsageRemaining")} {nearwakeUsage.used}/{nearwakeUsage.quota}{" "}
-              {t("planTimesUnit")}
-            </p>
-          ) : null}
           <p className="mt-2 text-center text-[11px] text-[#8E8E93]">{t("mapKeepTabOpen")}</p>
         </section>
-      ) : null}
-
-      {tracking.alarming ? (
-        <div className="fixed inset-x-4 top-16 z-30 flex items-center justify-between gap-3 rounded-2xl bg-[#29292E] px-4 py-3 text-white shadow-lg">
-          <p className="text-sm font-semibold">{notifyOnExit ? t("mapAlarmExitTitle") : t("mapAlarmTitle")}</p>
-          <button type="button" onClick={tracking.dismissAlarm} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#29292E]">
-            {t("mapDismissAlarm")}
-          </button>
-        </div>
       ) : null}
 
       {toast ? (

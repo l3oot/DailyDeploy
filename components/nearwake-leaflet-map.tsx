@@ -15,7 +15,16 @@ type NearwakeLeafletMapProps = {
 
 type LeafletMap = {
   setView: (latlng: [number, number], zoom?: number) => LeafletMap;
-  fitBounds: (bounds: unknown, opts?: { padding?: [number, number] }) => LeafletMap;
+  fitBounds: (
+    bounds: unknown,
+    opts?: {
+      padding?: [number, number];
+      paddingTopLeft?: [number, number];
+      paddingBottomRight?: [number, number];
+      maxZoom?: number;
+      animate?: boolean;
+    },
+  ) => LeafletMap;
   flyTo: (latlng: [number, number], zoom?: number) => LeafletMap;
   invalidateSize: () => void;
   remove: () => void;
@@ -23,7 +32,12 @@ type LeafletMap = {
   off: (event: string) => void;
 };
 
-type LeafletCircle = { setLatLng: (latlng: [number, number]) => void; setRadius: (m: number) => void; remove: () => void };
+type LeafletCircle = {
+  setLatLng: (latlng: [number, number]) => void;
+  setRadius: (m: number) => void;
+  getBounds: () => unknown;
+  remove: () => void;
+};
 type LeafletMarker = { setLatLng: (latlng: [number, number]) => void; remove: () => void };
 
 type LeafletNS = {
@@ -82,6 +96,19 @@ function loadLeaflet() {
     });
   }
   return leafletPromise;
+}
+
+function fitMapToCircle(map: LeafletMap, circle: LeafletCircle) {
+  map.invalidateSize();
+  const side = 36;
+  const top = 88;
+  const bottom = Math.max(240, Math.round(window.innerHeight * 0.52));
+  map.fitBounds(circle.getBounds(), {
+    paddingTopLeft: [side, top],
+    paddingBottomRight: [side, bottom],
+    maxZoom: 16,
+    animate: false,
+  });
 }
 
 export function NearwakeLeafletMap({
@@ -203,21 +230,17 @@ export function NearwakeLeafletMap({
 
       mapRef.current = map;
       syncOverlays(map, L);
-      const currentDest = destRef.current;
-      const currentGps = gpsRef.current;
-      if (currentDest && currentGps) {
-        map.fitBounds(L.latLngBounds([currentDest.lat, currentDest.lng], [currentGps.lat, currentGps.lng]), {
-          padding: [72, 72],
-        });
+      if (circleRef.current) {
+        fitMapToCircle(map, circleRef.current);
         fittedRef.current = true;
-      } else if (currentDest) {
-        map.setView([currentDest.lat, currentDest.lng], 15);
-        fittedRef.current = true;
-      } else if (currentGps) {
-        map.setView([currentGps.lat, currentGps.lng], 15);
+      } else if (gpsRef.current) {
+        map.setView([gpsRef.current.lat, gpsRef.current.lng], 15);
         fittedRef.current = true;
       }
-      requestAnimationFrame(() => map.invalidateSize());
+      requestAnimationFrame(() => {
+        map.invalidateSize();
+        if (circleRef.current) fitMapToCircle(map, circleRef.current);
+      });
     });
 
     return () => {
@@ -245,16 +268,9 @@ export function NearwakeLeafletMap({
     const map = mapRef.current;
     const L = window.L;
     if (!map || !L) return;
-    map.invalidateSize();
-    if (dest) {
-      const current = gpsRef.current;
-      if (current) {
-        map.fitBounds(L.latLngBounds([dest.lat, dest.lng], [current.lat, current.lng]), {
-          padding: [72, 72],
-        });
-      } else {
-        map.setView([dest.lat, dest.lng], 15);
-      }
+    syncOverlays(map, L);
+    if (dest && circleRef.current) {
+      fitMapToCircle(map, circleRef.current);
       fittedRef.current = true;
       return;
     }
@@ -262,7 +278,7 @@ export function NearwakeLeafletMap({
       map.setView([gps.lat, gps.lng], 15);
       fittedRef.current = true;
     }
-  }, [dest?.lat, dest?.lng]);
+  }, [dest?.lat, dest?.lng, radiusMeters]);
 
   useEffect(() => {
     const map = mapRef.current;

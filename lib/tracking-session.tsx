@@ -14,6 +14,7 @@ import { distanceMeters, isInsideGeofence } from "./geofence";
 import { startGeoWatch, startScreenWakeLock } from "./geo-watch";
 import { useI18n } from "./i18n/provider";
 import { startNearAlarm, stopNearAlarm } from "./near-alarm";
+import { consumeFeature } from "./plan-api";
 
 export type TrackingDest = {
   lat: number;
@@ -27,6 +28,7 @@ type PersistShape = {
   radiusMeters: number;
   notifyOnExit: boolean;
   inside: boolean;
+  reachedDest?: boolean;
 };
 
 const STORAGE_KEY = "da_tracking";
@@ -89,6 +91,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [alarming, setAlarming] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const insideRef = useRef(false);
+  const reachedDestRef = useRef(false);
   const destRef = useRef<TrackingDest | null>(null);
   const radiusRef = useRef(500);
   const notifyRef = useRef(false);
@@ -103,6 +106,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
     radiusRef.current = saved.radiusMeters;
     notifyRef.current = saved.notifyOnExit;
     insideRef.current = saved.inside;
+    reachedDestRef.current = Boolean(saved.reachedDest) || saved.inside;
     setDest(saved.dest);
     setRadiusMeters(saved.radiusMeters);
     setNotifyOnExit(saved.notifyOnExit);
@@ -135,7 +139,14 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
     const inside = isInsideGeofence(gps, destPoint, radiusMeters);
     const wasInside = insideRef.current;
     insideRef.current = inside;
-    savePersist({ dest, radiusMeters, notifyOnExit, inside });
+    if (inside) reachedDestRef.current = true;
+    savePersist({
+      dest,
+      radiusMeters,
+      notifyOnExit,
+      inside,
+      reachedDest: reachedDestRef.current,
+    });
 
     if (!notifyOnExit && inside && !wasInside) {
       startNearAlarm({
@@ -167,6 +178,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         ? isInsideGeofence(gps, { lat: input.dest.lat, lng: input.dest.lon }, input.radiusMeters)
         : false;
       insideRef.current = alreadyInside;
+      reachedDestRef.current = alreadyInside;
       setDest(input.dest);
       setRadiusMeters(input.radiusMeters);
       setNotifyOnExit(input.notifyOnExit);
@@ -176,6 +188,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         radiusMeters: input.radiusMeters,
         notifyOnExit: input.notifyOnExit,
         inside: alreadyInside,
+        reachedDest: alreadyInside,
       });
       if (!input.notifyOnExit && alreadyInside) {
         startNearAlarm({
@@ -192,13 +205,16 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   );
 
   const stop = useCallback(() => {
+    const shouldCharge = reachedDestRef.current;
     setActive(false);
     setAlarming(false);
     insideRef.current = false;
+    reachedDestRef.current = false;
     destRef.current = null;
     setDest(null);
     savePersist(null);
     stopNearAlarm();
+    if (shouldCharge) void consumeFeature("nearwake");
   }, []);
 
   const dismissAlarm = useCallback(() => {

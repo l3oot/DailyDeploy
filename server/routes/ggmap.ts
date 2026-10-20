@@ -12,6 +12,24 @@ function respond<T>(c: Context, body: ApiResponse<T>) {
   return c.json(body, body.isSuccess ? 200 : (statusFor(body.errorType) as ContentfulStatusCode));
 }
 
+function googleReferer(c: Context) {
+  const prodHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const prodUrl = prodHost
+    ? prodHost.startsWith("http")
+      ? prodHost
+      : `https://${prodHost}`
+    : "https://dailydeploy.vercel.app";
+  const origin = c.req.header("origin")?.trim();
+  if (origin && !isLocalOrigin(origin)) return origin;
+  const referer = c.req.header("referer")?.trim();
+  if (referer && !isLocalOrigin(referer)) return referer;
+  return prodUrl;
+}
+
+function isLocalOrigin(value: string) {
+  return /localhost|127\.0\.0\.1/i.test(value);
+}
+
 ggmapRoutes.get("/location", async (c) => {
   const input = (c.req.query("input") ?? c.req.query("Input") ?? "").trim();
   if (input.length < 2) {
@@ -63,6 +81,7 @@ ggmapRoutes.post("/route", async (c) => {
       originLng,
       destLat,
       destLng,
+      referer: googleReferer(c),
     });
     if (!route) {
       return c.json(fail("Routes API returned no route", TypeError.NotFound), 404);

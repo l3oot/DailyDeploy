@@ -6,6 +6,28 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
 export const FREE_MONTHLY_QUOTA = 30;
 
+export const NEARWAKE_RADIUS_MIN_METERS = 50;
+export const NEARWAKE_RADIUS_STEP_METERS = 50;
+export const NEARWAKE_RADIUS_DEFAULT_METERS = 500;
+
+/** Alarm radius ceiling by plan: Free 500 m, Plus 3 km, Pro 5 km. */
+export const NEARWAKE_RADIUS_MAX_METERS: Record<PlanCode, number> = {
+  free: 500,
+  plus: 3_000,
+  pro: 5_000,
+};
+
+export function nearwakeRadiusMaxMeters(planCode: PlanCode | null | undefined) {
+  return NEARWAKE_RADIUS_MAX_METERS[planCode ?? "free"];
+}
+
+export function clampNearwakeRadius(meters: number, planCode: PlanCode | null | undefined) {
+  const max = nearwakeRadiusMaxMeters(planCode);
+  const clamped = Math.min(max, Math.max(NEARWAKE_RADIUS_MIN_METERS, meters));
+  const steps = Math.round(clamped / NEARWAKE_RADIUS_STEP_METERS);
+  return Math.min(max, steps * NEARWAKE_RADIUS_STEP_METERS);
+}
+
 export type PlanInfo = {
   planCode: PlanCode;
   planName: string;

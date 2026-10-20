@@ -25,6 +25,7 @@ type PlaceSearchProps = {
   suggestionsEnabled?: boolean;
   trailing?: React.ReactNode;
   menuAnchorRef?: RefObject<HTMLElement | null>;
+  showInlineStatus?: boolean;
 };
 
 export function PlaceSearch({
@@ -36,6 +37,7 @@ export function PlaceSearch({
   suggestionsEnabled = true,
   trailing,
   menuAnchorRef,
+  showInlineStatus = true,
 }: PlaceSearchProps) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -101,12 +103,12 @@ export function PlaceSearch({
         />
         {trailing}
       </div>
-      {busy || resolving ? (
+      {showInlineStatus && (busy || resolving) ? (
         <p className="mt-1 text-xs text-[#8E8E93]">
           {resolving ? t("resolvingPlace") : t("searchingPlaces")}
         </p>
       ) : null}
-      {error ? <p className="mt-1 text-xs text-[#C33E83]">{error}</p> : null}
+      {showInlineStatus && error ? <p className="mt-1 text-xs text-[#C33E83]">{error}</p> : null}
       {showMenu ? (
         <PlaceSearchMenu anchorRef={menuAnchorRef} fallbackRef={rootRef}>
           {suggestions.map((item) => (
