@@ -14,6 +14,7 @@ export type ResolvedPlace = {
   lat: number;
   lon: number;
   name: string;
+  detail?: string;
   source: "nearwake" | "longdo" | "google";
   storeplaceUuid?: string;
 };
@@ -135,6 +136,7 @@ export async function resolveSelectedPlace(
     place: {
       ...body.data,
       storeplaceUuid,
+      detail: suggestion.detail || body.data.detail || undefined,
     },
   };
 }

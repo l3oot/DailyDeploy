@@ -3,9 +3,23 @@ import { getDb } from "../db";
 import { toilet, users } from "../db/schema";
 import { fail, ok, TypeError, type ApiResponse } from "../lib/api-response";
 
+const PLACE_TYPES = new Set(["mall", "gas", "food"]);
+
 export type ToiletDto = {
   toiletUuid: string;
   placeToilet: string;
+  placeType: string;
+  addressToilet: string;
+  cleanToilet: boolean;
+  freeToilet: boolean;
+  accessibleToilet: boolean;
+  attendantToilet: boolean;
+  diaperToilet: boolean;
+  genderSplitToilet: boolean;
+  tissueToilet: boolean;
+  paperToilet: boolean;
+  photosToilet: string[];
+  photoCount: number;
   cleanScoreToilet: number | null;
   bidetToilet: string | null;
   priceToilet: number | null;
@@ -28,10 +42,28 @@ function clip(value: string, max: number) {
   return value.trim().slice(0, max);
 }
 
-function toDto(row: ToiletRow, userName: string | null = null): ToiletDto {
+function toDto(
+  row: ToiletRow,
+  userName: string | null = null,
+  coverOnly = false,
+): ToiletDto {
+  const photos = row.toiletPhotos ?? [];
+  const bidet = row.toiletBidet ?? "";
   return {
     toiletUuid: row.toiletUuid,
     placeToilet: row.toiletPlace,
+    placeType: row.toiletType ?? "",
+    addressToilet: row.toiletAddress ?? "",
+    cleanToilet: (row.toiletCleanscore ?? 0) > 0,
+    freeToilet: row.toiletPrice === 0,
+    accessibleToilet: row.toiletAccessible,
+    attendantToilet: row.toiletAttendant,
+    diaperToilet: row.toiletDiaper,
+    genderSplitToilet: row.toiletGenderSplit,
+    tissueToilet: row.toiletTissue || bidet.includes("ทิชชู่"),
+    paperToilet: row.toiletPaper,
+    photosToilet: coverOnly ? photos.slice(0, 1) : photos,
+    photoCount: photos.length,
     cleanScoreToilet: row.toiletCleanscore,
     bidetToilet: row.toiletBidet,
     priceToilet: row.toiletPrice,
@@ -60,18 +92,25 @@ async function userForAuth(authUuid: string) {
 
 export type ToiletWriteInput = {
   placeToilet: string;
-  cleanScoreToilet: number | null;
-  bidetToilet: string | null;
-  priceToilet: number | null;
-  quantityToilet: number | null;
-  avgScoreToilet: number | null;
-  commentToilet: string | null;
+  placeType: string;
+  addressToilet: string;
+  cleanToilet: boolean;
+  freeToilet: boolean;
+  accessibleToilet: boolean;
+  attendantToilet: boolean;
+  diaperToilet: boolean;
+  genderSplitToilet: boolean;
+  tissueToilet: boolean;
+  paperToilet: boolean;
+  photosToilet: string[];
   latitudeToilet: number | null;
   longitudeToilet: number | null;
-  statusToilet: string | null;
-  safeToilet: number | null;
   openHoursToilet: string | null;
 };
+
+export function isToiletPlaceType(value: string) {
+  return PLACE_TYPES.has(value);
+}
 
 export async function createToilet(
   authUuid: string,
@@ -80,21 +119,30 @@ export async function createToilet(
   const user = await userForAuth(authUuid);
   if (!user) return fail("User NotFound", TypeError.NotFound);
 
-  const place = clip(input.placeToilet, 50) || "-";
+  const place = clip(input.placeToilet, 120);
   const row = {
     toiletUuid: crypto.randomUUID(),
     toiletPlace: place,
-    toiletCleanscore: input.cleanScoreToilet ?? 0,
-    toiletBidet: input.bidetToilet ?? "-",
-    toiletPrice: input.priceToilet ?? 0,
-    toiletQuantity: input.quantityToilet ?? 1,
-    toiletAvgscore: input.avgScoreToilet ?? 0,
-    toiletComment: input.commentToilet ?? "-",
+    toiletCleanscore: input.cleanToilet ? 1 : 0,
+    toiletBidet: input.tissueToilet ? "ทิชชู่" : "-",
+    toiletPrice: input.freeToilet ? 0 : null,
+    toiletQuantity: 1,
+    toiletAvgscore: 0,
+    toiletComment: "-",
     toiletLatitude: input.latitudeToilet ?? 0,
     toiletLongitude: input.longitudeToilet ?? 0,
-    toiletStatus: input.statusToilet ?? "open",
-    toiletSafe: input.safeToilet ?? 0,
-    toiletOpenhours: input.openHoursToilet ?? "-",
+    toiletStatus: "เปิด",
+    toiletSafe: 0,
+    toiletOpenhours: input.openHoursToilet,
+    toiletType: input.placeType,
+    toiletAddress: clip(input.addressToilet, 255),
+    toiletAccessible: input.accessibleToilet,
+    toiletAttendant: input.attendantToilet,
+    toiletDiaper: input.diaperToilet,
+    toiletGenderSplit: input.genderSplitToilet,
+    toiletTissue: input.tissueToilet,
+    toiletPaper: input.paperToilet,
+    toiletPhotos: input.photosToilet,
     userUuid: user.userUuid,
   };
 
@@ -150,9 +198,23 @@ export async function listToilets(bounds?: ToiletBounds): Promise<ApiResponse<To
     .limit(VIEWPORT_LIMIT);
 
   return ok(
-    rows.map((row) => toDto(row.toilet, row.userName ?? null)),
+    rows.map((row) => toDto(row.toilet, row.userName ?? null, true)),
     "Get All Toilet",
   );
+}
+
+export async function getToilet(toiletUuid: string): Promise<ApiResponse<ToiletDto | null>> {
+  const uuid = toiletUuid.trim();
+  if (!uuid) return fail("ToiletUuid is required", TypeError.ValidationError);
+  const rows = await getDb()
+    .select({ toilet, userName: users.userName })
+    .from(toilet)
+    .leftJoin(users, eq(toilet.userUuid, users.userUuid))
+    .where(eq(toilet.toiletUuid, uuid))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return fail("Toilet NotFound", TypeError.NotFound);
+  return ok(toDto(row.toilet, row.userName ?? null), "Get Toilet");
 }
 
 export async function updateToilet(
@@ -172,18 +234,22 @@ export async function updateToilet(
   const updatedRows = await getDb()
     .update(toilet)
     .set({
-      toiletPlace: clip(input.placeToilet, 50) || current.toiletPlace,
-      toiletCleanscore: input.cleanScoreToilet ?? current.toiletCleanscore,
-      toiletBidet: input.bidetToilet ?? current.toiletBidet,
-      toiletPrice: input.priceToilet ?? current.toiletPrice,
-      toiletQuantity: input.quantityToilet ?? current.toiletQuantity,
-      toiletAvgscore: input.avgScoreToilet ?? current.toiletAvgscore,
-      toiletComment: input.commentToilet ?? current.toiletComment,
+      toiletPlace: clip(input.placeToilet, 120) || current.toiletPlace,
+      toiletCleanscore: input.cleanToilet ? 1 : 0,
+      toiletBidet: input.tissueToilet ? "ทิชชู่" : "-",
+      toiletPrice: input.freeToilet ? 0 : null,
       toiletLatitude: input.latitudeToilet ?? current.toiletLatitude,
       toiletLongitude: input.longitudeToilet ?? current.toiletLongitude,
-      toiletStatus: input.statusToilet ?? current.toiletStatus,
-      toiletSafe: input.safeToilet ?? current.toiletSafe,
-      toiletOpenhours: input.openHoursToilet ?? current.toiletOpenhours,
+      toiletOpenhours: input.openHoursToilet,
+      toiletType: input.placeType,
+      toiletAddress: clip(input.addressToilet, 255),
+      toiletAccessible: input.accessibleToilet,
+      toiletAttendant: input.attendantToilet,
+      toiletDiaper: input.diaperToilet,
+      toiletGenderSplit: input.genderSplitToilet,
+      toiletTissue: input.tissueToilet,
+      toiletPaper: input.paperToilet,
+      toiletPhotos: input.photosToilet,
       updatedAt: new Date(),
     })
     .where(eq(toilet.toiletUuid, uuid))

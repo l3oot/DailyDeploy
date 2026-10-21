@@ -38,7 +38,8 @@ input:focus {
   background: #e8eef5;
 }
 
-.toilet-map-pin {
+.toilet-map-pin,
+.nearwake-marker {
   background: transparent;
   border: none;
 }

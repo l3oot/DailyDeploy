@@ -3,11 +3,13 @@ import { decodePolyline } from "./taxi";
 
 export type DrivingRouteResult = {
   distanceKm: number;
+  durationMinutes: number | null;
   points: { lat: number; lng: number }[];
 };
 
 type RoutePayload = {
   distanceKm?: number;
+  durationSeconds?: number;
   encodedPolyline?: string;
 };
 
@@ -40,5 +42,8 @@ export async function fetchDrivingRoute(
       points = [origin, dest];
     }
   }
-  return { distanceKm: km, points };
+  const seconds = body.data?.durationSeconds;
+  const durationMinutes =
+    typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds / 60 : null;
+  return { distanceKm: km, durationMinutes, points };
 }

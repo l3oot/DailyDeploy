@@ -20,7 +20,9 @@ export type TrackingDest = {
   lat: number;
   lon: number;
   name: string;
+  detail?: string;
   storeplaceUuid?: string;
+  fromFavorite?: boolean;
 };
 
 type PersistShape = {
@@ -44,6 +46,7 @@ type TrackingContextValue = {
   alarming: boolean;
   mapVisible: boolean;
   start: (input: { dest: TrackingDest; radiusMeters: number; notifyOnExit: boolean }) => void;
+  setRadius: (meters: number) => void;
   stop: () => void;
   dismissAlarm: () => void;
   setMapVisible: (visible: boolean) => void;
@@ -92,6 +95,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [mapVisible, setMapVisible] = useState(false);
   const insideRef = useRef(false);
   const reachedDestRef = useRef(false);
+  const activeRef = useRef(false);
+  activeRef.current = active;
   const destRef = useRef<TrackingDest | null>(null);
   const radiusRef = useRef(500);
   const notifyRef = useRef(false);
@@ -204,6 +209,20 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
     [gps, t],
   );
 
+  const setRadius = useCallback((meters: number) => {
+    radiusRef.current = meters;
+    setRadiusMeters(meters);
+    const current = destRef.current;
+    if (!activeRef.current || !current) return;
+    savePersist({
+      dest: current,
+      radiusMeters: meters,
+      notifyOnExit: notifyRef.current,
+      inside: insideRef.current,
+      reachedDest: reachedDestRef.current,
+    });
+  }, []);
+
   const stop = useCallback(() => {
     const shouldCharge = reachedDestRef.current;
     setActive(false);
@@ -239,6 +258,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       alarming,
       mapVisible,
       start,
+      setRadius,
       stop,
       dismissAlarm,
       setMapVisible,
@@ -254,6 +274,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       alarming,
       mapVisible,
       start,
+      setRadius,
       stop,
       dismissAlarm,
     ],

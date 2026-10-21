@@ -1,4 +1,5 @@
 import {
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -120,9 +121,28 @@ export const favoritePlace = pgTable(
   (t) => [unique("favorite_place_user_store_unique").on(t.userUuid, t.storeplaceUuid)],
 );
 
+export const recentPlace = pgTable(
+  "recent_place",
+  {
+    recentPlaceUuid: uuid("recent_place_uuid").primaryKey(),
+    recentPlaceName: varchar("recent_place_name", { length: 150 }),
+    userUuid: uuid("user_uuid")
+      .notNull()
+      .references(() => users.userUuid),
+    storeplaceUuid: uuid("storeplace_uuid")
+      .notNull()
+      .references(() => storeplace.storeplaceUuid),
+    usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("recent_place_user_store_unique").on(t.userUuid, t.storeplaceUuid),
+    index("recent_place_user_used_idx").on(t.userUuid, t.usedAt.desc()),
+  ],
+);
+
 export const toilet = pgTable("toilet", {
   toiletUuid: uuid("toilet_uuid").primaryKey().defaultRandom(),
-  toiletPlace: varchar("toilet_place", { length: 50 }).notNull(),
+  toiletPlace: varchar("toilet_place", { length: 120 }).notNull(),
   toiletCleanscore: integer("toilet_cleanscore"),
   toiletBidet: varchar("toilet_bidet", { length: 50 }),
   toiletPrice: integer("toilet_price"),
@@ -134,6 +154,15 @@ export const toilet = pgTable("toilet", {
   toiletStatus: varchar("toilet_status", { length: 50 }),
   toiletSafe: integer("toilet_safe"),
   toiletOpenhours: varchar("toilet_openhours", { length: 50 }),
+  toiletType: varchar("toilet_type", { length: 40 }),
+  toiletAddress: varchar("toilet_address", { length: 255 }),
+  toiletAccessible: boolean("toilet_accessible").notNull().default(false),
+  toiletAttendant: boolean("toilet_attendant").notNull().default(false),
+  toiletDiaper: boolean("toilet_diaper").notNull().default(false),
+  toiletGenderSplit: boolean("toilet_gender_split").notNull().default(false),
+  toiletTissue: boolean("toilet_tissue").notNull().default(false),
+  toiletPaper: boolean("toilet_paper").notNull().default(false),
+  toiletPhotos: text("toilet_photos").array().notNull().default([]),
   userUuid: uuid("user_uuid").references(() => users.userUuid),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

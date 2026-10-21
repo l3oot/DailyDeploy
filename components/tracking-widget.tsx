@@ -16,7 +16,7 @@ export function TrackingWidget() {
   const aboveFooter = path === "/home" || path === "/account";
   const href = `/nearwake/map?lat=${dest.lat}&lng=${dest.lon}&name=${encodeURIComponent(dest.name)}${
     dest.storeplaceUuid ? `&storeplaceUuid=${encodeURIComponent(dest.storeplaceUuid)}` : ""
-  }`;
+  }${dest.fromFavorite ? "&from=favorite" : ""}`;
 
   return (
     <div className={`fixed inset-x-3 z-40 ${aboveFooter ? "bottom-24" : "bottom-4"}`}>

@@ -9,6 +9,7 @@ import {
   listFavoritePlaces,
   updateFavoritePlace,
 } from "../services/favorite-place-service";
+import { deleteRecentPlace, listRecentPlaces, rememberRecentPlace } from "../services/recent-place-service";
 import { createLocation, findLocations } from "../services/nearwake-service";
 
 const nearwakeRoutes = new Hono();
@@ -81,6 +82,42 @@ nearwakeRoutes.put("/favoriteplace", async (c) => {
       authUuid: auth.authUuid,
       favoritePlaceUuid: pickString(body, "favoritePlaceUuid"),
       favoritePlaceName: pickString(body, "favoritePlaceName"),
+    }),
+  );
+});
+
+nearwakeRoutes.get("/recentplace", async (c) => {
+  const auth = await requireAuth(c);
+  if (!auth.ok) return auth.response;
+  return respond(c, await listRecentPlaces(auth.authUuid));
+});
+
+nearwakeRoutes.post("/recentplace", async (c) => {
+  const auth = await requireAuth(c);
+  if (!auth.ok) return auth.response;
+  const body = await readJson(c.req.raw);
+  const storeplaceUuid = pickString(body, "storeplaceUuid");
+  if (!storeplaceUuid) {
+    return c.json(fail("storeplaceUuid is required", TypeError.ValidationError), 400);
+  }
+  return respond(
+    c,
+    await rememberRecentPlace({
+      authUuid: auth.authUuid,
+      recentPlaceName: pickString(body, "recentPlaceName"),
+      storeplaceUuid,
+    }),
+  );
+});
+
+nearwakeRoutes.delete("/recentplace/:recentPlaceUuid", async (c) => {
+  const auth = await requireAuth(c);
+  if (!auth.ok) return auth.response;
+  return respond(
+    c,
+    await deleteRecentPlace({
+      authUuid: auth.authUuid,
+      recentPlaceUuid: c.req.param("recentPlaceUuid"),
     }),
   );
 });

@@ -7,9 +7,24 @@ export type ToiletBounds = {
   maxLng: number;
 };
 
+export const TOILET_PLACE_TYPES = ["mall", "gas", "food"] as const;
+export type ToiletPlaceType = (typeof TOILET_PLACE_TYPES)[number];
+
 export type ToiletLocation = {
   toiletUuid: string;
   placeToilet: string;
+  placeType: string;
+  addressToilet: string;
+  cleanToilet: boolean;
+  freeToilet: boolean;
+  accessibleToilet: boolean;
+  attendantToilet: boolean;
+  diaperToilet: boolean;
+  genderSplitToilet: boolean;
+  tissueToilet: boolean;
+  paperToilet: boolean;
+  photosToilet: string[];
+  photoCount: number;
   cleanScoreToilet: number;
   bidetToilet: string;
   priceToilet: number;
@@ -25,27 +40,37 @@ export type ToiletLocation = {
   userName: string;
 };
 
-export type ToiletWritePayload = {
+export type CreateToiletInput = {
   placeToilet: string;
-  cleanScoreToilet: number;
-  bidetToilet: string;
-  priceToilet: number;
-  quantityToilet: number;
-  avgScoreToilet: number;
-  commentToilet: string | null;
+  placeType: string;
+  addressToilet: string;
+  cleanToilet: boolean;
+  freeToilet: boolean;
+  accessibleToilet: boolean;
+  attendantToilet: boolean;
+  diaperToilet: boolean;
+  genderSplitToilet: boolean;
+  tissueToilet: boolean;
+  paperToilet: boolean;
+  photosToilet: string[];
   latitudeToilet: number;
   longitudeToilet: number;
-  statusToilet: string;
-  safeToilet: number;
-  openHoursToilet: string;
+  openHoursToilet: string | null;
 };
-
-export type CreateToiletInput = ToiletWritePayload;
 
 function readInt(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
   const n = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function readBool(value: unknown) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+function readPhotos(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
 function readNum(value: unknown): number | null {
@@ -61,12 +86,29 @@ export function parseToiletLocation(raw: unknown): ToiletLocation | null {
   const lat = readNum(json.latitudeToilet ?? json.LatitudeToilet);
   const lng = readNum(json.longitudeToilet ?? json.LongitudeToilet);
   if (!uuid || lat == null || lng == null) return null;
+  const bidet = String(json.bidetToilet ?? json.BidetToilet ?? "");
+  const photos = readPhotos(json.photosToilet ?? json.PhotosToilet);
+  const priceRaw = json.priceToilet ?? json.PriceToilet;
+  const price = priceRaw == null || priceRaw === "" ? null : readNum(priceRaw);
+  const cleanScore = readInt(json.cleanScoreToilet ?? json.CleanScoreToilet);
   return {
     toiletUuid: uuid,
     placeToilet: String(json.placeToilet ?? json.PlaceToilet ?? ""),
-    cleanScoreToilet: readInt(json.cleanScoreToilet ?? json.CleanScoreToilet),
-    bidetToilet: String(json.bidetToilet ?? json.BidetToilet ?? ""),
-    priceToilet: readInt(json.priceToilet ?? json.PriceToilet),
+    placeType: String(json.placeType ?? json.PlaceType ?? ""),
+    addressToilet: String(json.addressToilet ?? json.AddressToilet ?? ""),
+    cleanToilet: readBool(json.cleanToilet ?? json.CleanToilet) || cleanScore > 0,
+    freeToilet: readBool(json.freeToilet ?? json.FreeToilet) || price === 0,
+    accessibleToilet: readBool(json.accessibleToilet ?? json.AccessibleToilet),
+    attendantToilet: readBool(json.attendantToilet ?? json.AttendantToilet),
+    diaperToilet: readBool(json.diaperToilet ?? json.DiaperToilet),
+    genderSplitToilet: readBool(json.genderSplitToilet ?? json.GenderSplitToilet),
+    tissueToilet: readBool(json.tissueToilet ?? json.TissueToilet) || bidet.includes("ทิชชู่"),
+    paperToilet: readBool(json.paperToilet ?? json.PaperToilet),
+    photosToilet: photos,
+    photoCount: readInt(json.photoCount ?? json.PhotoCount, photos.length),
+    cleanScoreToilet: cleanScore,
+    bidetToilet: bidet,
+    priceToilet: price == null ? 0 : Math.round(price),
     quantityToilet: readInt(json.quantityToilet ?? json.QuantityToilet, 1),
     avgScoreToilet: readInt(json.avgScoreToilet ?? json.AvgScoreToilet),
     commentToilet: String(json.commentToilet ?? json.CommentToilet ?? ""),
@@ -120,10 +162,12 @@ async function writeToilet(method: "POST" | "PUT", input: Record<string, unknown
   };
 }
 
-export async function createToiletLocation(input: CreateToiletInput) {
-  return writeToilet("POST", input);
+export async function fetchToiletLocation(toiletUuid: string) {
+  const res = await api<unknown>(`/api/v1/toilet/location/${encodeURIComponent(toiletUuid)}`);
+  if (!res.body.isSuccess) return null;
+  return parseToiletLocation(res.body.data);
 }
 
-export async function updateToiletLocation(input: ToiletWritePayload & { toiletUuid: string }) {
-  return writeToilet("PUT", input);
+export async function createToiletLocation(input: CreateToiletInput) {
+  return writeToilet("POST", input);
 }

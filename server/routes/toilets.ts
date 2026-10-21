@@ -2,10 +2,12 @@ import { Hono, type Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { fail, statusFor, TypeError, type ApiResponse } from "../lib/api-response";
 import { requireAuth } from "../lib/auth-guard";
-import { pickNumber, pickString, readJson } from "../lib/body";
+import { pickBool, pickNumber, pickPhotos, pickString, readJson } from "../lib/body";
 import {
   countToilets,
   createToilet,
+  getToilet,
+  isToiletPlaceType,
   listToilets,
   updateToilet,
   type ToiletWriteInput,
@@ -20,21 +22,38 @@ function respond<T>(c: Context, body: ApiResponse<T>, successStatus: ContentfulS
   );
 }
 
+const HOURS = /^(?:[01]\d|2[0-3]):[0-5]\d-(?:[01]\d|2[0-3]):[0-5]\d$/;
+
 function readWriteInput(body: Record<string, unknown>): ToiletWriteInput {
+  const hours = pickString(body, "openHoursToilet");
   return {
     placeToilet: pickString(body, "placeToilet"),
-    cleanScoreToilet: pickNumber(body, "cleanScoreToilet"),
-    bidetToilet: pickString(body, "bidetToilet"),
-    priceToilet: pickNumber(body, "priceToilet"),
-    quantityToilet: pickNumber(body, "quantityToilet"),
-    avgScoreToilet: pickNumber(body, "avgScoreToilet"),
-    commentToilet: pickString(body, "commentToilet"),
+    placeType: pickString(body, "placeType"),
+    addressToilet: pickString(body, "addressToilet"),
+    cleanToilet: pickBool(body, "cleanToilet"),
+    freeToilet: pickBool(body, "freeToilet"),
+    accessibleToilet: pickBool(body, "accessibleToilet"),
+    attendantToilet: pickBool(body, "attendantToilet"),
+    diaperToilet: pickBool(body, "diaperToilet"),
+    genderSplitToilet: pickBool(body, "genderSplitToilet"),
+    tissueToilet: pickBool(body, "tissueToilet"),
+    paperToilet: pickBool(body, "paperToilet"),
+    photosToilet: pickPhotos(body, "photosToilet"),
     latitudeToilet: pickNumber(body, "latitudeToilet", "lat"),
     longitudeToilet: pickNumber(body, "longitudeToilet", "lon", "lng"),
-    statusToilet: pickString(body, "statusToilet"),
-    safeToilet: pickNumber(body, "safeToilet"),
-    openHoursToilet: pickString(body, "openHoursToilet"),
+    openHoursToilet: hours && hours !== "-" ? hours : null,
   };
+}
+
+function validateWrite(input: ToiletWriteInput) {
+  if (!input.placeToilet) return "PlaceToilet is required";
+  if (!isToiletPlaceType(input.placeType)) return "Place type is required";
+  if (!input.addressToilet) return "Address is required";
+  if (input.latitudeToilet == null || input.longitudeToilet == null) {
+    return "Latitude and longitude are required";
+  }
+  if (input.openHoursToilet && !HOURS.test(input.openHoursToilet)) return "Open hours are invalid";
+  return "";
 }
 
 toiletRoutes.get("/location/count", async (c) => respond(c, await countToilets()));
@@ -48,6 +67,10 @@ function queryNumber(c: Context, ...keys: string[]) {
   }
   return null;
 }
+
+toiletRoutes.get("/location/:toiletUuid", async (c) => {
+  return respond(c, await getToilet(c.req.param("toiletUuid")));
+});
 
 toiletRoutes.get("/location", async (c) => {
   const minLat = queryNumber(c, "minLat", "south");
@@ -65,12 +88,8 @@ toiletRoutes.post("/location", async (c) => {
   if (!auth.ok) return auth.response;
   const body = await readJson(c.req.raw);
   const input = readWriteInput(body);
-  if (!input.placeToilet) {
-    return c.json(fail("PlaceToilet is required", TypeError.ValidationError), 400);
-  }
-  if (input.latitudeToilet == null || input.longitudeToilet == null) {
-    return c.json(fail("Latitude and longitude are required", TypeError.ValidationError), 400);
-  }
+  const invalid = validateWrite(input);
+  if (invalid) return c.json(fail(invalid, TypeError.ValidationError), 400);
   return respond(c, await createToilet(auth.authUuid, input), 201);
 });
 
@@ -82,7 +101,10 @@ toiletRoutes.put("/location", async (c) => {
   if (!toiletUuid) {
     return c.json(fail("ToiletUuid is required", TypeError.ValidationError), 400);
   }
-  return respond(c, await updateToilet({ ...readWriteInput(body), toiletUuid }));
+  const input = readWriteInput(body);
+  const invalid = validateWrite(input);
+  if (invalid) return c.json(fail(invalid, TypeError.ValidationError), 400);
+  return respond(c, await updateToilet({ ...input, toiletUuid }));
 });
 
 export default toiletRoutes;

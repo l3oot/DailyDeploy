@@ -2,6 +2,7 @@ import { serverEnv } from "../env";
 
 export type DrivingRoute = {
   distanceKm: number;
+  durationSeconds?: number;
   encodedPolyline?: string;
 };
 
@@ -75,6 +76,7 @@ async function computeViaRoutesApi(
   const data = parseJson<{
     routes?: Array<{
       distanceMeters?: number;
+      duration?: unknown;
       polyline?: { encodedPolyline?: string };
     }>;
   }>(raw);
@@ -85,6 +87,7 @@ async function computeViaRoutesApi(
   const encoded = first?.polyline?.encodedPolyline?.trim();
   return {
     distanceKm: meters / 1000,
+    durationSeconds: durationToSeconds(first?.duration),
     encodedPolyline: encoded || undefined,
   };
 }
@@ -115,7 +118,7 @@ async function computeViaDirectionsApi(
     error_message?: string;
     routes?: Array<{
       overview_polyline?: { points?: string };
-      legs?: Array<{ distance?: { value?: number } }>;
+      legs?: Array<{ distance?: { value?: number }; duration?: { value?: number } }>;
     }>;
   }>(raw);
   if (!data || data.status !== "OK") {
@@ -130,12 +133,24 @@ async function computeViaDirectionsApi(
   const first = data.routes?.[0];
   const meters = first?.legs?.reduce((sum, leg) => sum + (leg.distance?.value ?? 0), 0) ?? 0;
   if (!Number.isFinite(meters) || meters <= 0) return null;
+  const durationSeconds = first?.legs?.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) ?? 0;
 
   const encoded = first?.overview_polyline?.points?.trim();
   return {
     distanceKm: meters / 1000,
+    durationSeconds: durationSeconds > 0 ? Math.round(durationSeconds) : undefined,
     encodedPolyline: encoded || undefined,
   };
+}
+
+function durationToSeconds(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.round(value);
+  if (typeof value !== "string") return undefined;
+  const match = /^(\d+(?:\.\d+)?)s$/.exec(value.trim());
+  if (!match) return undefined;
+  const seconds = Number(match[1]);
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return Math.round(seconds);
 }
 
 function parseJson<T>(raw: string): T | null {

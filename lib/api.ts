@@ -24,7 +24,7 @@ const SKIP_REFRESH = new Set([
   "/api/v1/auth/logout",
 ]);
 
-const PUBLIC_APP_PATHS = new Set(["/welcome", "/login", "/terms"]);
+const PUBLIC_APP_PATHS = new Set(["/welcome", "/login", "/terms", "/privacy"]);
 
 type RefreshResult = { ok: boolean; status: number };
 
